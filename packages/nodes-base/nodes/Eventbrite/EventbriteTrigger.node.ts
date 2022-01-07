@@ -22,7 +22,6 @@ export class EventbriteTrigger implements INodeType {
 		description: 'Handle Eventbrite events via webhooks',
 		defaults: {
 			name: 'Eventbrite Trigger',
-			color: '#dc5237',
 		},
 		inputs: [],
 		outputs: ['main'],
