@@ -56,8 +56,8 @@ export function getSpecialNodeParameters(nodeType: INodeType): INodeProperties[]
 					multipleValues: true,
 					multipleValueButtonText: 'Add Poll Time',
 				},
-				default: {},
-				description: 'Time at which polling should occur.',
+				default: { item: [{ mode: 'everyMinute' }] },
+				description: 'Time at which polling should occur',
 				placeholder: 'Add Poll Time',
 				options: [
 					{
@@ -782,7 +782,6 @@ export function getNodeParameters(
 
 			if (Object.keys(collectionValues).length !== 0 || returnDefaults) {
 				// Set only if value got found
-
 				if (returnDefaults) {
 					// Set also when it has the default value
 					if (collectionValues === undefined) {

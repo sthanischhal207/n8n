@@ -974,7 +974,7 @@ export const messageFields = [
 										type: 'options',
 										options: [
 											{
-												name: 'Markdowm',
+												name: 'Markdown',
 												value: 'mrkwdn',
 											},
 											{
@@ -1052,7 +1052,7 @@ export const messageFields = [
 										type: 'options',
 										options: [
 											{
-												name: 'Markdowm',
+												name: 'Markdown',
 												value: 'mrkwdn',
 											},
 											{
