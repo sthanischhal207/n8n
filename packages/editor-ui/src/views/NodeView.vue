@@ -2615,7 +2615,12 @@ export default mixins(
 
 					nodesInfo.forEach(nodeInfo => {
 						if (nodeInfo.translation) {
-							addNodeTranslation(nodeInfo.translation, this.$store.getters.defaultLocale);
+							const nodeType = this.$locale.shortNodeType(nodeInfo.name);
+
+							addNodeTranslation(
+								{ [nodeType]: nodeInfo.translation },
+								this.$store.getters.defaultLocale,
+							);
 						}
 					});
 

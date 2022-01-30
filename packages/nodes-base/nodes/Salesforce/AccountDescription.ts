@@ -146,6 +146,13 @@ export const accountFields = [
 		},
 		options: [
 			{
+				displayName: 'Account Number',
+				name: 'accountNumber',
+				type: 'string',
+				default: '',
+				description: 'Account number assigned to this account (not the unique ID). Maximum size is 40 characters.',
+			},
+			{
 				displayName: 'Account Source',
 				name: 'accountSource',
 				type: 'options',
@@ -409,6 +416,13 @@ export const accountFields = [
 			},
 		},
 		options: [
+			{
+				displayName: 'Account Number',
+				name: 'accountNumber',
+				type: 'string',
+				default: '',
+				description: 'Account number assigned to this account (not the unique ID). Maximum size is 40 characters.',
+			},
 			{
 				displayName: 'Account Source',
 				name: 'accountSource',

@@ -229,7 +229,7 @@ export class AwsFirehose implements INodeType {
 							records.push({Data: buffer.toString('base64')});
 						});
 					} else {
-						const recordsData = this.getNodeParameter('records', i) as Records;
+						const recordsData = this.getNodeParameter('records', ix) as Records;
 						if(recordsData  && recordsData.record){
 							for( let i= 0; i < recordsData.record.length; i++){
 								const data = recordsData.record[i].data as string;
