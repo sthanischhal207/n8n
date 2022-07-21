@@ -839,6 +839,11 @@ export interface INode {
 	parameters: INodeParameters;
 	credentials?: INodeCredentials;
 	webhookId?: string;
+	pinData?: IDataObject;
+}
+
+export interface PinData {
+	[nodeName: string]: IDataObject[];
 }
 
 export interface INodes {
@@ -1323,6 +1328,7 @@ export interface IRunExecutionData {
 	resultData: {
 		error?: ExecutionError;
 		runData: IRunData;
+		pinData?: PinData;
 		lastNodeExecuted?: string;
 	};
 	executionData?: {
@@ -1396,6 +1402,7 @@ export interface IWorkflowBase {
 	connections: IConnections;
 	settings?: IWorkflowSettings;
 	staticData?: IDataObject;
+	pinData?: PinData;
 }
 
 export interface IWorkflowCredentials {
@@ -1516,6 +1523,7 @@ export interface INodesGraph {
 	node_connections: IDataObject[];
 	nodes: INodesGraphNode;
 	notes: INotesGraphNode;
+	is_pinned: boolean;
 }
 
 export interface INodesGraphNode {
@@ -1588,3 +1596,22 @@ export interface IOAuth2Credentials {
 	scope: string;
 	oauthTokenData?: IDataObject;
 }
+
+export type PublicInstalledPackage = {
+	packageName: string;
+	installedVersion: string;
+	authorName?: string;
+	authorEmail?: string;
+	installedNodes: PublicInstalledNode[];
+	createdAt: Date;
+	updatedAt: Date;
+	updateAvailable?: string;
+	failedLoading?: boolean;
+};
+
+export type PublicInstalledNode = {
+	name: string;
+	type: string;
+	latestVersion: string;
+	package: PublicInstalledPackage;
+};
