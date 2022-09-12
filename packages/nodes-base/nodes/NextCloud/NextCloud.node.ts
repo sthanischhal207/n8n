@@ -1,5 +1,5 @@
 import { IExecuteFunctions } from 'n8n-core';
-import { NodeApiError } from 'n8n-workflow';
+import { IBinaryKeyData, NodeApiError } from 'n8n-workflow';
 
 import {
 	IDataObject,
@@ -223,10 +223,10 @@ export class NextCloud implements INodeType {
 						action: 'Get a user',
 					},
 					{
-						name: 'Get All',
+						name: 'Get Many',
 						value: 'getAll',
 						description: 'Retrieve a list of users',
-						action: 'Get all users',
+						action: 'Get many users',
 					},
 					{
 						name: 'Update',
@@ -557,6 +557,7 @@ export class NextCloud implements INodeType {
 						displayName: 'Password',
 						name: 'password',
 						type: 'string',
+						typeOptions: { password: true },
 						displayOptions: {
 							show: {
 								'/resource': ['file', 'folder'],
@@ -1139,7 +1140,7 @@ export class NextCloud implements INodeType {
 						// Create a shallow copy of the binary data so that the old
 						// data references which do not get changed still stay behind
 						// but the incoming data does not get changed.
-						Object.assign(newItem.binary, items[i].binary);
+						Object.assign(newItem.binary as IBinaryKeyData, items[i].binary);
 					}
 
 					items[i] = newItem;
