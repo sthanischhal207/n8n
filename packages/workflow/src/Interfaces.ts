@@ -1090,6 +1090,8 @@ export interface IDisplayOptions {
 	show?: {
 		[key: string]: NodeParameterValue[] | undefined;
 	};
+
+	hideOnCloud?: boolean;
 }
 
 export interface INodeProperties {
@@ -2011,6 +2013,7 @@ export interface ResourceMapperField {
 	type?: FieldType;
 	removed?: boolean;
 	options?: INodePropertyOptions[];
+	readOnly?: boolean;
 }
 
 export type FieldType =
