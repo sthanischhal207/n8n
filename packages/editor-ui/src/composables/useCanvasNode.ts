@@ -5,11 +5,12 @@
 
 import { CanvasNodeKey } from '@/constants';
 import { computed, inject } from 'vue';
-import type { CanvasElementData } from '@/types';
+import type { CanvasNodeData } from '@/types';
+import { CanvasNodeRenderType } from '@/types';
 
 export function useCanvasNode() {
 	const node = inject(CanvasNodeKey);
-	const data = computed<CanvasElementData>(
+	const data = computed<CanvasNodeData>(
 		() =>
 			node?.data.value ?? {
 				id: '',
@@ -25,7 +26,10 @@ export function useCanvasNode() {
 					running: false,
 				},
 				runData: { count: 0, visible: false },
-				renderType: 'default',
+				render: {
+					type: CanvasNodeRenderType.Default,
+					options: {},
+				},
 			},
 	);
 
@@ -52,6 +56,8 @@ export function useCanvasNode() {
 	const runDataCount = computed(() => data.value.runData.count);
 	const hasRunData = computed(() => data.value.runData.visible);
 
+	const renderOptions = computed(() => data.value.render.options);
+
 	return {
 		node,
 		label,
@@ -69,5 +75,6 @@ export function useCanvasNode() {
 		executionStatus,
 		executionWaiting,
 		executionRunning,
+		renderOptions,
 	};
 }
