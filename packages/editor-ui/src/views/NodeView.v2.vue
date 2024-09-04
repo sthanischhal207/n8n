@@ -5,13 +5,13 @@ import {
 	nextTick,
 	onActivated,
 	onBeforeMount,
-	onBeforeUnmount,
 	onDeactivated,
 	onMounted,
 	ref,
 	useCssModule,
 	watch,
 	h,
+	onBeforeUnmount,
 } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import WorkflowCanvas from '@/components/canvas/WorkflowCanvas.vue';
@@ -53,7 +53,9 @@ import {
 	MAIN_HEADER_TABS,
 	MANUAL_CHAT_TRIGGER_NODE_TYPE,
 	MODAL_CONFIRM,
+	NEW_WORKFLOW_ID,
 	NODE_CREATOR_OPEN_SOURCES,
+	PLACEHOLDER_EMPTY_WORKFLOW_ID,
 	START_NODE_TYPE,
 	STICKY_NODE_TYPE,
 	VALID_WORKFLOW_IMPORT_URL_REGEX,
@@ -101,6 +103,7 @@ import { createEventBus } from 'n8n-design-system';
 import type { PinDataSource } from '@/composables/usePinnedData';
 import { useClipboard } from '@/composables/useClipboard';
 import { useBeforeUnload } from '@/composables/useBeforeUnload';
+import { useCollaborationStore } from '@/stores/collaboration.store';
 import { getResourcePermissions } from '@/permissions';
 import NodeViewUnfinishedWorkflowMessage from '@/components/NodeViewUnfinishedWorkflowMessage.vue';
 
@@ -134,6 +137,7 @@ const credentialsStore = useCredentialsStore();
 const environmentsStore = useEnvironmentsStore();
 const externalSecretsStore = useExternalSecretsStore();
 const rootStore = useRootStore();
+const collaborationStore = useCollaborationStore();
 const executionsStore = useExecutionsStore();
 const canvasStore = useCanvasStore();
 const npsSurveyStore = useNpsSurveyStore();
@@ -150,7 +154,7 @@ const canvasEventBus = createEventBus<CanvasEventBusEvents>();
 const { addBeforeUnloadEventBindings, removeBeforeUnloadEventBindings } = useBeforeUnload({
 	route,
 });
-const { registerCustomAction } = useGlobalLinkActions();
+const { registerCustomAction, unregisterCustomAction } = useGlobalLinkActions();
 const { runWorkflow, stopCurrentExecution, stopWaitingForWebhook } = useRunWorkflow({ router });
 const {
 	updateNodePosition,
@@ -199,12 +203,18 @@ const isExecutionPreview = ref(false);
 const canOpenNDV = ref(true);
 const hideNodeIssues = ref(false);
 
-const workflowId = computed<string>(() => route.params.name as string);
-const workflow = computed(() => workflowsStore.workflowsById[workflowId.value]);
+const initializedWorkflowId = ref<string | undefined>();
+const workflowId = computed(() => {
+	const workflowIdParam = route.params.name as string;
+	return [PLACEHOLDER_EMPTY_WORKFLOW_ID, NEW_WORKFLOW_ID].includes(workflowIdParam)
+		? undefined
+		: workflowIdParam;
+});
 
-const isNewWorkflowRoute = computed(() => route.name === VIEWS.NEW_WORKFLOW);
+const isNewWorkflowRoute = computed(() => route.name === VIEWS.NEW_WORKFLOW || !workflowId.value);
+const isWorkflowRoute = computed(() => !!route?.meta?.nodeView);
 const isDemoRoute = computed(() => route.name === VIEWS.DEMO);
-const isReadOnlyRoute = computed(() => route?.meta?.readOnlyCanvas === true);
+const isReadOnlyRoute = computed(() => !!route?.meta?.readOnlyCanvas);
 const isReadOnlyEnvironment = computed(() => {
 	return sourceControlStore.preferences.branchReadOnly;
 });
@@ -285,6 +295,10 @@ async function initializeRoute() {
 		return;
 	}
 
+	const isAlreadyInitialized =
+		initializedWorkflowId.value &&
+		[NEW_WORKFLOW_ID, workflowId.value].includes(initializedWorkflowId.value);
+
 	// This function is called on route change as well, so we need to do the following:
 	// - if the redirect is blank, then do nothing
 	// - if the route is the template import view, then open the template
@@ -294,11 +308,11 @@ async function initializeRoute() {
 	} else if (route.name === VIEWS.TEMPLATE_IMPORT) {
 		const templateId = route.params.id;
 		await openWorkflowTemplate(templateId.toString());
-	} else {
+	} else if (isWorkflowRoute.value && !isAlreadyInitialized) {
 		historyStore.reset();
 
 		// If there is no workflow id, treat it as a new workflow
-		if (!workflowId.value || isNewWorkflowRoute.value) {
+		if (isNewWorkflowRoute.value || !workflowId.value) {
 			if (route.meta?.nodeView === true) {
 				await initializeWorkspaceForNewWorkflow();
 			}
@@ -306,14 +320,14 @@ async function initializeRoute() {
 		}
 
 		await initializeWorkspaceForExistingWorkflow(workflowId.value);
+
+		nodeHelpers.updateNodesInputIssues();
+		nodeHelpers.updateNodesCredentialsIssues();
+		nodeHelpers.updateNodesParameterIssues();
+
+		await loadCredentials();
+		await initializeDebugMode();
 	}
-
-	nodeHelpers.updateNodesInputIssues();
-	nodeHelpers.updateNodesCredentialsIssues();
-	nodeHelpers.updateNodesParameterIssues();
-
-	await loadCredentials();
-	await initializeDebugMode();
 }
 
 async function initializeWorkspaceForNewWorkflow() {
@@ -323,11 +337,10 @@ async function initializeWorkspaceForNewWorkflow() {
 	workflowsStore.makeNewWorkflowShareable();
 
 	uiStore.nodeViewInitialized = true;
+	initializedWorkflowId.value = NEW_WORKFLOW_ID;
 }
 
 async function initializeWorkspaceForExistingWorkflow(id: string) {
-	resetWorkspace();
-
 	try {
 		const workflowData = await workflowsStore.fetchWorkflow(id);
 
@@ -337,7 +350,11 @@ async function initializeWorkspaceForExistingWorkflow(id: string) {
 			trackOpenWorkflowFromOnboardingTemplate();
 		}
 
-		await projectsStore.setProjectNavActiveIdByWorkflowHomeProject(workflow.value.homeProject);
+		await projectsStore.setProjectNavActiveIdByWorkflowHomeProject(
+			editableWorkflow.value.homeProject,
+		);
+
+		collaborationStore.notifyWorkflowOpened(id);
 	} catch (error) {
 		toast.showError(error, i18n.baseText('openWorkflow.workflowNotFoundError'));
 
@@ -346,6 +363,7 @@ async function initializeWorkspaceForExistingWorkflow(id: string) {
 		});
 	} finally {
 		uiStore.nodeViewInitialized = true;
+		initializedWorkflowId.value = workflowId.value;
 	}
 }
 
@@ -355,7 +373,7 @@ async function initializeWorkspaceForExistingWorkflow(id: string) {
 
 async function openWorkflow(data: IWorkflowDb) {
 	resetWorkspace();
-	titleSet(workflow.value.name, 'IDLE');
+	titleSet(editableWorkflow.value.name, 'IDLE');
 
 	await initializeWorkspace(data);
 
@@ -378,7 +396,7 @@ async function openWorkflow(data: IWorkflowDb) {
 
 function trackOpenWorkflowFromOnboardingTemplate() {
 	telemetry.track(
-		`User opened workflow from onboarding template with ID ${workflow.value.meta?.onboardingId}`,
+		`User opened workflow from onboarding template with ID ${editableWorkflow.value.meta?.onboardingId}`,
 		{
 			workflow_id: workflowId.value,
 		},
@@ -712,8 +730,8 @@ function onClickNodeAdd(source: string, sourceHandle: string) {
 async function loadCredentials() {
 	let options: { workflowId: string } | { projectId: string };
 
-	if (workflow.value) {
-		options = { workflowId: workflow.value.id };
+	if (editableWorkflow.value) {
+		options = { workflowId: editableWorkflow.value.id };
 	} else {
 		const queryParam =
 			typeof route.query?.projectId === 'string' ? route.query?.projectId : undefined;
@@ -913,7 +931,9 @@ function onClickConnectionAdd(connection: Connection) {
  */
 
 const workflowPermissions = computed(() => {
-	return getResourcePermissions(workflowsStore.getWorkflowById(workflowId.value)?.scopes).workflow;
+	return workflowId.value
+		? getResourcePermissions(workflowsStore.getWorkflowById(workflowId.value)?.scopes).workflow
+		: {};
 });
 
 const projectPermissions = computed(() => {
@@ -1196,7 +1216,7 @@ async function onSourceControlPull() {
 			loadCredentials(),
 		]);
 
-		if (workflowId.value !== null && !uiStore.stateIsDirty) {
+		if (workflowId.value && !uiStore.stateIsDirty) {
 			const workflowData = await workflowsStore.fetchWorkflow(workflowId.value);
 			if (workflowData) {
 				titleSet(workflowData.name, 'IDLE');
@@ -1302,6 +1322,10 @@ async function onPostMessageReceived(messageEvent: MessageEvent) {
  */
 
 function checkIfEditingIsAllowed(): boolean {
+	if (!initializedWorkflowId.value) {
+		return true;
+	}
+
 	if (readOnlyNotification.value?.visible) {
 		return false;
 	}
@@ -1434,6 +1458,12 @@ function registerCustomActions() {
 	});
 }
 
+function unregisterCustomActions() {
+	unregisterCustomAction('openNodeDetail');
+	unregisterCustomAction('openSelectiveNodeCreator');
+	unregisterCustomAction('showNodeCreator');
+}
+
 /**
  * Routing
  */
@@ -1441,10 +1471,6 @@ function registerCustomActions() {
 watch(
 	() => route.name,
 	async () => {
-		if (!checkIfEditingIsAllowed()) {
-			return;
-		}
-
 		await initializeRoute();
 	},
 );
@@ -1456,11 +1482,13 @@ watch(
 onBeforeMount(() => {
 	if (!isDemoRoute.value) {
 		pushConnectionStore.pushConnect();
+		collaborationStore.initialize();
 	}
 });
 
-onMounted(async () => {
+onMounted(() => {
 	canvasStore.startLoading();
+
 	titleReset();
 	resetWorkspace();
 
@@ -1474,6 +1502,8 @@ onMounted(async () => {
 			.finally(() => {
 				isLoading.value = false;
 				canvasStore.stopLoading();
+
+				void externalHooks.run('nodeView.mount').catch(() => {});
 			});
 
 		void usersStore.showPersonalizationSurvey();
@@ -1481,34 +1511,32 @@ onMounted(async () => {
 		checkIfRouteIsAllowed();
 	});
 
-	addUndoRedoEventBindings();
-	addPostMessageEventBindings();
 	addSourceControlEventBindings();
+	addPostMessageEventBindings();
+	addWorkflowSavedEventBindings();
+	addBeforeUnloadEventBindings();
 	addImportEventBindings();
 	addExecutionOpenedEventBindings();
-	addWorkflowSavedEventBindings();
-
 	registerCustomActions();
-
-	// @TODO: This currently breaks since front-end hooks are still not updated to work with pinia store
-	void externalHooks.run('nodeView.mount').catch(() => {});
 });
 
-onActivated(() => {
-	addBeforeUnloadEventBindings();
-});
-
-onBeforeUnmount(() => {
-	removeUndoRedoEventBindings();
-	removePostMessageEventBindings();
-	removeSourceControlEventBindings();
-	removeImportEventBindings();
-	removeExecutionOpenedEventBindings();
-	removeWorkflowSavedEventBindings();
+onActivated(async () => {
+	addUndoRedoEventBindings();
 });
 
 onDeactivated(() => {
+	removeUndoRedoEventBindings();
+});
+
+onBeforeUnmount(() => {
+	removeSourceControlEventBindings();
+	removePostMessageEventBindings();
+	removeWorkflowSavedEventBindings();
 	removeBeforeUnloadEventBindings();
+	removeImportEventBindings();
+	removeExecutionOpenedEventBindings();
+	unregisterCustomActions();
+	collaborationStore.terminate();
 });
 </script>
 
