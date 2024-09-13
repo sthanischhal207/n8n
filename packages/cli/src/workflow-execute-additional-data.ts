@@ -3,8 +3,9 @@
 
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
+import type { PushType } from '@n8n/api-types';
+import { GlobalConfig } from '@n8n/config';
 import { WorkflowExecute } from 'n8n-core';
-
 import type {
 	IDataObject,
 	IExecuteData,
@@ -33,45 +34,39 @@ import {
 	Workflow,
 	WorkflowHooks,
 } from 'n8n-workflow';
-
 import { Container } from 'typedi';
-import config from '@/config';
+
 import { ActiveExecutions } from '@/active-executions';
+import config from '@/config';
 import { CredentialsHelper } from '@/credentials-helper';
+import { ExecutionRepository } from '@/databases/repositories/execution.repository';
 import { ExternalHooks } from '@/external-hooks';
-import type {
-	IPushDataExecutionFinished,
-	IWorkflowExecuteProcess,
-	IWorkflowErrorData,
-	IPushDataType,
-	ExecutionPayload,
-} from '@/interfaces';
+import type { IWorkflowExecuteProcess, IWorkflowErrorData, ExecutionPayload } from '@/interfaces';
 import { NodeTypes } from '@/node-types';
 import { Push } from '@/push';
-import * as WorkflowHelpers from '@/workflow-helpers';
-import { findSubworkflowStart, isWorkflowIdValid } from '@/utils';
-import { PermissionChecker } from './user-management/permission-checker';
-import { ExecutionRepository } from '@/databases/repositories/execution.repository';
 import { WorkflowStatisticsService } from '@/services/workflow-statistics.service';
-import { SecretsHelper } from './secrets-helpers';
-import { OwnershipService } from './services/ownership.service';
+import { findSubworkflowStart, isWorkflowIdValid } from '@/utils';
+import * as WorkflowHelpers from '@/workflow-helpers';
+
+import { WorkflowRepository } from './databases/repositories/workflow.repository';
+import type { AiEventMap, AiEventPayload } from './events/ai-event-map';
+import { EventService } from './events/event.service';
+import { restoreBinaryDataId } from './execution-lifecycle-hooks/restore-binary-data-id';
+import { saveExecutionProgress } from './execution-lifecycle-hooks/save-execution-progress';
 import {
 	determineFinalExecutionStatus,
 	prepareExecutionDataForDbUpdate,
 	updateExistingExecution,
 } from './execution-lifecycle-hooks/shared/shared-hook-functions';
-import { restoreBinaryDataId } from './execution-lifecycle-hooks/restore-binary-data-id';
 import { toSaveSettings } from './execution-lifecycle-hooks/to-save-settings';
 import { Logger } from './logger';
-import { saveExecutionProgress } from './execution-lifecycle-hooks/save-execution-progress';
-import { WorkflowStaticDataService } from './workflows/workflow-static-data.service';
-import { WorkflowRepository } from './databases/repositories/workflow.repository';
+import { SecretsHelper } from './secrets-helpers';
+import { OwnershipService } from './services/ownership.service';
 import { UrlService } from './services/url.service';
-import { WorkflowExecutionService } from './workflows/workflow-execution.service';
-import type { AiEventMap, AiEventPayload } from './events/ai-event-map';
-import { EventService } from './events/event.service';
-import { GlobalConfig } from '@n8n/config';
 import { SubworkflowPolicyChecker } from './subworkflows/subworkflow-policy-checker.service';
+import { PermissionChecker } from './user-management/permission-checker';
+import { WorkflowExecutionService } from './workflows/workflow-execution.service';
+import { WorkflowStaticDataService } from './workflows/workflow-static-data.service';
 
 export function objectToError(errorObject: unknown, workflow: Workflow): Error {
 	// TODO: Expand with other error types
@@ -299,7 +294,6 @@ function hookFunctionsPush(): IWorkflowExecuteHooks {
 						startedAt: new Date(),
 						retryOf: this.retryOf,
 						workflowId,
-						pushRef,
 						workflowName,
 					},
 					pushRef,
@@ -346,13 +340,15 @@ function hookFunctionsPush(): IWorkflowExecuteHooks {
 					workflowId,
 				});
 				// TODO: Look at this again
-				const sendData: IPushDataExecutionFinished = {
-					executionId,
-					data: pushRunData,
-					retryOf,
-				};
-
-				pushInstance.send('executionFinished', sendData, pushRef);
+				pushInstance.send(
+					'executionFinished',
+					{
+						executionId,
+						data: pushRunData,
+						retryOf,
+					},
+					pushRef,
+				);
 			},
 		],
 	};
@@ -938,7 +934,7 @@ export function setExecutionStatus(status: ExecutionStatus) {
 	Container.get(ActiveExecutions).setStatus(this.executionId, status);
 }
 
-export function sendDataToUI(type: string, data: IDataObject | IDataObject[]) {
+export function sendDataToUI(type: PushType, data: IDataObject | IDataObject[]) {
 	const { pushRef } = this;
 	if (pushRef === undefined) {
 		return;
@@ -947,7 +943,7 @@ export function sendDataToUI(type: string, data: IDataObject | IDataObject[]) {
 	// Push data to session which started workflow
 	try {
 		const pushInstance = Container.get(Push);
-		pushInstance.send(type as IPushDataType, data, pushRef);
+		pushInstance.send(type, data, pushRef);
 	} catch (error) {
 		const logger = Container.get(Logger);
 		logger.warn(`There was a problem sending message to UI: ${error.message}`);
