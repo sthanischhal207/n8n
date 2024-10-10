@@ -17,6 +17,7 @@ import type {
 	INodeParameters,
 	IRunExecutionData,
 	WorkflowExecuteMode,
+	EnvProviderState,
 } from 'n8n-workflow';
 import * as a from 'node:assert';
 import { runInNewContext, type Context } from 'node:vm';
@@ -24,6 +25,8 @@ import { runInNewContext, type Context } from 'node:vm';
 import type { TaskResultData } from '@/runner-types';
 import { type Task, TaskRunner } from '@/task-runner';
 
+import type { RequireResolver } from './require-resolver';
+import { createRequireResolver } from './require-resolver';
 import { validateRunForAllItemsOutput, validateRunForEachItemOutput } from './result-validation';
 
 export interface JSExecSettings {
@@ -63,6 +66,7 @@ export interface AllCodeTaskData {
 	connectionInputData: INodeExecutionData[];
 	siblingParameters: INodeParameters;
 	mode: WorkflowExecuteMode;
+	envProviderState?: EnvProviderState;
 	executeData?: IExecuteData;
 	defaultReturnRunIndex: number;
 	selfData: IDataObject;
@@ -70,19 +74,47 @@ export interface AllCodeTaskData {
 	additionalData: PartialAdditionalData;
 }
 
+export interface JsTaskRunnerOpts {
+	wsUrl: string;
+	grantToken: string;
+	maxConcurrency: number;
+	name?: string;
+	/**
+	 * List of built-in nodejs modules that are allowed to be required in the
+	 * execution sandbox. Asterisk (*) can be used to allow all.
+	 */
+	allowedBuiltInModules?: string;
+	/**
+	 * List of npm modules that are allowed to be required in the execution
+	 * sandbox. Asterisk (*) can be used to allow all.
+	 */
+	allowedExternalModules?: string;
+}
+
 type CustomConsole = {
 	log: (...args: unknown[]) => void;
 };
 
 export class JsTaskRunner extends TaskRunner {
-	constructor(
-		taskType: string,
-		wsUrl: string,
-		grantToken: string,
-		maxConcurrency: number,
-		name?: string,
-	) {
-		super(taskType, wsUrl, grantToken, maxConcurrency, name ?? 'JS Task Runner');
+	private readonly requireResolver: RequireResolver;
+
+	constructor({
+		grantToken,
+		maxConcurrency,
+		wsUrl,
+		name = 'JS Task Runner',
+		allowedBuiltInModules,
+		allowedExternalModules,
+	}: JsTaskRunnerOpts) {
+		super('javascript', wsUrl, grantToken, maxConcurrency, name);
+
+		const parseModuleAllowList = (moduleList: string) =>
+			moduleList === '*' ? null : new Set(moduleList.split(',').map((x) => x.trim()));
+
+		this.requireResolver = createRequireResolver({
+			allowedBuiltInModules: parseModuleAllowList(allowedBuiltInModules ?? ''),
+			allowedExternalModules: parseModuleAllowList(allowedExternalModules ?? ''),
+		});
 	}
 
 	async executeTask(task: Task<JSExecSettings>): Promise<TaskResultData> {
@@ -143,7 +175,7 @@ export class JsTaskRunner extends TaskRunner {
 		const inputItems = allData.connectionInputData;
 
 		const context: Context = {
-			require,
+			require: this.requireResolver,
 			module: {},
 			console: customConsole,
 
@@ -190,7 +222,7 @@ export class JsTaskRunner extends TaskRunner {
 			const item = inputItems[index];
 			const dataProxy = this.createDataProxy(allData, workflow, index);
 			const context: Context = {
-				require,
+				require: this.requireResolver,
 				module: {},
 				console: customConsole,
 				item,
@@ -262,6 +294,13 @@ export class JsTaskRunner extends TaskRunner {
 			allData.defaultReturnRunIndex,
 			allData.selfData,
 			allData.contextNodeName,
+			// Make sure that even if we don't receive the envProviderState for
+			// whatever reason, we don't expose the task runner's env to the code
+			allData.envProviderState ?? {
+				env: {},
+				isEnvAccessBlocked: false,
+				isProcessAvailable: true,
+			},
 		).getDataProxy();
 	}
 
