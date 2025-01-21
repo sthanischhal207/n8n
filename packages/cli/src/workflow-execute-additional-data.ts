@@ -576,8 +576,11 @@ function hookFunctionsSaveWorker(): IWorkflowExecuteHooks {
 					executionId: this.executionId,
 					workflowId: this.workflowData.id,
 				});
+
+				const isManualMode = this.mode === 'manual';
+
 				try {
-					if (isWorkflowIdValid(this.workflowData.id) && newStaticData) {
+					if (!isManualMode && isWorkflowIdValid(this.workflowData.id) && newStaticData) {
 						// Workflow is saved so update in database
 						try {
 							await Container.get(WorkflowStaticDataService).saveStaticDataById(
@@ -596,7 +599,11 @@ function hookFunctionsSaveWorker(): IWorkflowExecuteHooks {
 					const workflowStatusFinal = determineFinalExecutionStatus(fullRunData);
 					fullRunData.status = workflowStatusFinal;
 
-					if (workflowStatusFinal !== 'success' && workflowStatusFinal !== 'waiting') {
+					if (
+						!isManualMode &&
+						workflowStatusFinal !== 'success' &&
+						workflowStatusFinal !== 'waiting'
+					) {
 						executeErrorWorkflow(
 							this.workflowData,
 							fullRunData,
@@ -615,19 +622,25 @@ function hookFunctionsSaveWorker(): IWorkflowExecuteHooks {
 						retryOf: this.retryOf,
 					});
 
+					// When going into the waiting state, store the pushRef in the execution-data
+					if (fullRunData.waitTill && isManualMode) {
+						fullExecutionData.data.pushRef = this.pushRef;
+					}
+
 					await updateExistingExecution({
 						executionId: this.executionId,
 						workflowId: this.workflowData.id,
 						executionData: fullExecutionData,
 					});
 				} catch (error) {
-					executeErrorWorkflow(
-						this.workflowData,
-						fullRunData,
-						this.mode,
-						this.executionId,
-						this.retryOf,
-					);
+					if (!isManualMode)
+						executeErrorWorkflow(
+							this.workflowData,
+							fullRunData,
+							this.mode,
+							this.executionId,
+							this.retryOf,
+						);
 				} finally {
 					workflowStatisticsService.emit('workflowExecutionCompleted', {
 						workflowData: this.workflowData,
@@ -1150,11 +1163,28 @@ export function getWorkflowHooksWorkerMain(
 
 			const saveSettings = toSaveSettings(this.workflowData.settings);
 
+			const isManualMode = this.mode === 'manual';
+
+			if (isManualMode && !saveSettings.manual && !fullRunData.waitTill) {
+				/**
+				 * When manual executions are not being saved, we only soft-delete
+				 * the execution so that the user can access its binary data
+				 * while building their workflow.
+				 *
+				 * The manual execution and its binary data will be hard-deleted
+				 * on the next pruning cycle after the grace period set by
+				 * `EXECUTIONS_DATA_HARD_DELETE_BUFFER`.
+				 */
+				await Container.get(ExecutionRepository).softDelete(this.executionId);
+
+				return;
+			}
+
 			const shouldNotSave =
 				(executionStatus === 'success' && !saveSettings.success) ||
 				(executionStatus !== 'success' && !saveSettings.error);
 
-			if (shouldNotSave) {
+			if (!isManualMode && shouldNotSave && !fullRunData.waitTill) {
 				await Container.get(ExecutionRepository).hardDelete({
 					workflowId: this.workflowData.id,
 					executionId: this.executionId,
