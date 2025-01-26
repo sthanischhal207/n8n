@@ -1,41 +1,45 @@
 import * as crypto from 'crypto';
 import type {
+	DeclarativeRestApiSettings,
 	IDataObject,
+	IExecutePaginationFunctions,
 	IHttpRequestOptions,
 	ILoadOptionsFunctions,
+	INodeExecutionData,
 	INodeListSearchItems,
 	INodeListSearchResult,
 } from 'n8n-workflow';
 import { ApplicationError } from 'n8n-workflow';
 import * as querystring from 'querystring';
 
-export const HeaderConstants = {
-	// Required
-	AUTHORIZATION: 'Authorization',
-	CONTENT_TYPE: 'Content-Type',
-	X_MS_DATE: 'x-ms-date',
-	X_MS_VERSION: 'x-ms-version',
+// export const HeaderConstants = {
+// 	// Required
+// 	AUTHORIZATION: 'Authorization',
+// 	CONTENT_TYPE: 'Content-Type',
+// 	X_MS_DATE: 'x-ms-date',
+// 	X_MS_VERSION: 'x-ms-version',
 
-	//Required - for session consistency only
-	X_MS_SESSION_TOKEN: 'x-ms-session-token',
+// 	//Required - for session consistency only
+// 	X_MS_SESSION_TOKEN: 'x-ms-session-token',
 
-	// Optional
-	IF_MATCH: 'If-Match',
-	IF_NONE_MATCH: 'If-None-Match',
-	IF_MODIFIED_SINCE: 'If-Modified-Since',
-	USER_AGENT: 'User-Agent',
-	X_MS_ACTIVITY_ID: 'x-ms-activity-id',
-	X_MS_CONSISTENCY_LEVEL: 'x-ms-consistency-level',
-	X_MS_CONTINUATION: 'x-ms-continuation',
-	X_MS_MAX_ITEM_COUNT: 'x-ms-max-item-count',
-	X_MS_DOCUMENTDB_PARTITIONKEY: 'x-ms-documentdb-partitionkey',
-	X_MS_DOCUMENTDB_QUERY_ENABLECROSSPARTITION: 'x-ms-documentdb-query-enablecrosspartition',
-	A_IM: 'A-IM',
-	X_MS_DOCUMENTDB_PARTITIONKEYRANGEID: 'x-ms-documentdb-partitionkeyrangeid',
-	X_MS_COSMOS_ALLOW_TENTATIVE_WRITES: 'x-ms-cosmos-allow-tentative-writes',
+// 	// Optional
+// 	IF_MATCH: 'If-Match',
+// 	IF_NONE_MATCH: 'If-None-Match',
+// 	IF_MODIFIED_SINCE: 'If-Modified-Since',
+// 	USER_AGENT: 'User-Agent',
+// 	X_MS_ACTIVITY_ID: 'x-ms-activity-id',
+// 	X_MS_CONSISTENCY_LEVEL: 'x-ms-consistency-level',
+// 	X_MS_CONTINUATION: 'x-ms-continuation',
+// 	X_MS_MAX_ITEM_COUNT: 'x-ms-max-item-count',
+// 	X_MS_DOCUMENTDB_PARTITIONKEY: 'x-ms-documentdb-partitionkey',
+// 	X_MS_DOCUMENTDB_ISQUERY: 'x-ms-documentdb-isquery',
+// 	X_MS_DOCUMENTDB_QUERY_ENABLECROSSPARTITION: 'x-ms-documentdb-query-enablecrosspartition',
+// 	A_IM: 'A-IM',
+// 	X_MS_DOCUMENTDB_PARTITIONKEYRANGEID: 'x-ms-documentdb-partitionkeyrangeid',
+// 	X_MS_COSMOS_ALLOW_TENTATIVE_WRITES: 'x-ms-cosmos-allow-tentative-writes',
 
-	PREFIX_FOR_STORAGE: 'x-ms-',
-};
+// 	PREFIX_FOR_STORAGE: 'x-ms-',
+// };
 
 export function getAuthorizationTokenUsingMasterKey(
 	verb: string,
@@ -61,12 +65,67 @@ export function getAuthorizationTokenUsingMasterKey(
 	return authorizationString;
 }
 
+export async function handlePagination(
+	this: IExecutePaginationFunctions,
+	resultOptions: DeclarativeRestApiSettings.ResultOptions,
+): Promise<INodeExecutionData[]> {
+	const aggregatedResult: IDataObject[] = [];
+	let nextPageToken: string | undefined;
+	const returnAll = this.getNodeParameter('returnAll') as boolean;
+	let limit = 60;
+
+	if (!returnAll) {
+		limit = this.getNodeParameter('limit') as number;
+		resultOptions.maxResults = limit;
+	}
+
+	resultOptions.paginate = true;
+
+	do {
+		if (nextPageToken) {
+			resultOptions.options.headers = resultOptions.options.headers ?? {};
+			resultOptions.options.headers['x-ms-continuation'] = nextPageToken;
+		}
+
+		const responseData = await this.makeRoutingRequest(resultOptions);
+
+		if (Array.isArray(responseData)) {
+			for (const responsePage of responseData) {
+				aggregatedResult.push(responsePage);
+
+				if (!returnAll && aggregatedResult.length >= limit) {
+					return aggregatedResult.slice(0, limit).map((result) => ({ json: result }));
+				}
+			}
+		}
+
+		//TO-DO-check-if-works
+		if (responseData.length > 0) {
+			const lastItem = responseData[responseData.length - 1];
+
+			if ('headers' in lastItem) {
+				const headers = (lastItem as unknown as { headers: { [key: string]: string } }).headers;
+
+				if (headers) {
+					nextPageToken = headers['x-ms-continuation'] as string | undefined;
+				}
+			}
+		}
+
+		if (!nextPageToken) {
+			break;
+		}
+	} while (nextPageToken);
+
+	return aggregatedResult.map((result) => ({ json: result }));
+}
+
 export async function azureCosmosDbRequest(
 	this: ILoadOptionsFunctions,
 	opts: IHttpRequestOptions,
 ): Promise<IDataObject> {
-	const credentials = await this.getCredentials('azureCosmosDb');
-	const databaseAccount = credentials?.database;
+	const credentials = await this.getCredentials('azureCosmosDbSharedKeyApi');
+	const databaseAccount = credentials?.account;
 
 	if (!databaseAccount) {
 		throw new ApplicationError('Database account not found in credentials!', { level: 'error' });
@@ -93,7 +152,7 @@ export async function azureCosmosDbRequest(
 	try {
 		return (await this.helpers.requestWithAuthentication.call(
 			this,
-			'azureCosmosDb',
+			'azureCosmosDbSharedKeyApi',
 			requestOptions,
 		)) as IDataObject;
 	} catch (error) {
@@ -128,18 +187,17 @@ export async function azureCosmosDbRequest(
 export async function searchCollections(
 	this: ILoadOptionsFunctions,
 	filter?: string,
-	paginationToken?: string,
 ): Promise<INodeListSearchResult> {
 	const dbId = this.getNodeParameter('dbId') as string;
 	if (!dbId) {
 		throw new ApplicationError('Database ID is required');
 	}
 
-	const credentials = await this.getCredentials('azureCosmosDb');
-	const databaseAccount = credentials?.databaseAccount;
+	const credentials = await this.getCredentials('azureCosmosDbSharedKeyApi');
+	const databaseAccount = credentials?.account;
 
 	if (!databaseAccount) {
-		throw new ApplicationError('Database account not found in credentials!', { level: 'error' });
+		throw new ApplicationError('Account name not found in credentials!', { level: 'error' });
 	}
 
 	const opts: IHttpRequestOptions = {
@@ -154,9 +212,9 @@ export async function searchCollections(
 	const responseData: IDataObject = await azureCosmosDbRequest.call(this, opts);
 
 	const responseBody = responseData as {
-		Collections: IDataObject[];
+		DocumentCollections: IDataObject[];
 	};
-	const collections = responseBody.Collections;
+	const collections = responseBody.DocumentCollections;
 
 	if (!collections) {
 		return { results: [] };

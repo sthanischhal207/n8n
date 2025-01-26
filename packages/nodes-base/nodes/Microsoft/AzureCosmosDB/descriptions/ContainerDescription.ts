@@ -49,7 +49,7 @@ export const containerOperations: INodeProperties[] = [
 						url: '=/dbs/{{ $parameter["dbId"] }}/colls/{{ $parameter["collId"] }}',
 					},
 				},
-				action: 'Get item',
+				action: 'Get container',
 			},
 			{
 				name: 'Get Many',
@@ -159,12 +159,9 @@ export const createFields: INodeProperties[] = [
 		},
 	},
 	{
-		displayName: 'Additional Keys',
-		name: 'additionalKeys',
-		type: 'fixedCollection',
+		displayName: 'Additional Fields',
+		name: 'additionalFields',
 		default: {},
-		placeholder: '"paths": ["/AccountNumber"],"kind": "Hash", "Version": 2',
-		description: 'User-defined JSON object representing the document properties',
 		displayOptions: {
 			show: {
 				resource: ['container'],
@@ -189,6 +186,8 @@ export const createFields: INodeProperties[] = [
 				},
 			},
 		],
+		placeholder: 'Add Option',
+		type: 'collection',
 	},
 ];
 

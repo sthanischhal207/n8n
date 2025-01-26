@@ -17,9 +17,9 @@ export class AzureCosmosDbSharedKeyApi implements ICredentialType {
 
 	properties: INodeProperties[] = [
 		{
-			displayName: 'Database',
-			name: 'databaseAccount',
-			description: 'Database account',
+			displayName: 'Account',
+			name: 'account',
+			description: 'Account name',
 			type: 'string',
 			default: '',
 		},

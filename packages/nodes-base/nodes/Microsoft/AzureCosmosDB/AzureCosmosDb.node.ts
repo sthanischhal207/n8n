@@ -2,7 +2,8 @@ import type { INodeType, INodeTypeDescription } from 'n8n-workflow';
 import { NodeConnectionType } from 'n8n-workflow';
 
 import { containerFields, containerOperations } from './descriptions/ContainerDescription';
-import { itemFields, itemOperations } from '../../Aws/DynamoDB/ItemDescription';
+import { itemFields, itemOperations } from './descriptions/ItemDescription';
+import { searchCollections, searchDatabases } from './GenericFunctions';
 
 export class AzureCosmosDb implements INodeType {
 	description: INodeTypeDescription = {
@@ -33,7 +34,7 @@ export class AzureCosmosDb implements INodeType {
 			},
 		],
 		requestDefaults: {
-			baseURL: '=https://{$credentials.databaseAccount}.documents.azure.com',
+			baseURL: '=https://{$credentials.account}.documents.azure.com',
 			headers: {
 				Accept: 'application/json',
 			},
@@ -68,8 +69,8 @@ export class AzureCosmosDb implements INodeType {
 				],
 				default: 'container',
 			},
-			...itemFields,
 			...itemOperations,
+			...itemFields,
 			...containerOperations,
 			...containerFields,
 		],
@@ -77,8 +78,8 @@ export class AzureCosmosDb implements INodeType {
 
 	methods = {
 		listSearch: {
-			// searchCollections,
-			// searchDatabases,
+			searchCollections,
+			searchDatabases,
 		},
 	};
 }

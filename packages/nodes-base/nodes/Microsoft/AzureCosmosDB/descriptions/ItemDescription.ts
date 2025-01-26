@@ -1,4 +1,6 @@
-import type { INodeProperties } from 'n8n-workflow';
+import type { IExecuteSingleFunctions, IHttpRequestOptions, INodeProperties } from 'n8n-workflow';
+
+import { handlePagination } from '../GenericFunctions';
 
 export const itemOperations: INodeProperties[] = [
 	{
@@ -15,12 +17,12 @@ export const itemOperations: INodeProperties[] = [
 			{
 				name: 'Create',
 				value: 'create',
-				description: 'Create an item',
+				description: 'Create a new item',
 				routing: {
 					request: {
 						ignoreHttpStatusErrors: true,
 						method: 'POST',
-						url: '=/dbs/{{ $parameter["dbId"] }}/colls/{{ $parameter["collId"] }}/item',
+						url: '=/dbs/{{ $parameter["dbId"] }}/colls/{{ $parameter["collId"] }}/docs',
 					},
 				},
 				action: 'Create item',
@@ -28,12 +30,12 @@ export const itemOperations: INodeProperties[] = [
 			{
 				name: 'Delete',
 				value: 'delete',
-				description: 'Delete an item',
+				description: 'Delete an existing item',
 				routing: {
 					request: {
 						ignoreHttpStatusErrors: true,
 						method: 'DELETE',
-						url: '=/dbs/{{ $parameter["dbId"] }}/colls/{{ $parameter["collId"] }}/item/{{ $parameter["id"] }}',
+						url: '=/dbs/{{ $parameter["dbId"] }}/colls/{{ $parameter["collId"] }}/docs/{{ $parameter["id"] }}',
 					},
 				},
 				action: 'Delete item',
@@ -46,7 +48,7 @@ export const itemOperations: INodeProperties[] = [
 					request: {
 						ignoreHttpStatusErrors: true,
 						method: 'GET',
-						url: '=/dbs/{{ $parameter["dbId"] }}/colls/{{ $parameter["collId"] }}/item/{{ $parameter["id"] }}',
+						url: '=/dbs/{{ $parameter["dbId"] }}/colls/{{ $parameter["collId"] }}/docs/{{ $parameter["id"] }}',
 					},
 				},
 				action: 'Get item',
@@ -56,6 +58,12 @@ export const itemOperations: INodeProperties[] = [
 				value: 'getAll',
 				description: 'Retrieve a list of items',
 				routing: {
+					send: {
+						paginate: true,
+					},
+					operations: {
+						pagination: handlePagination,
+					},
 					request: {
 						ignoreHttpStatusErrors: true,
 						method: 'GET',
@@ -72,7 +80,11 @@ export const itemOperations: INodeProperties[] = [
 					request: {
 						ignoreHttpStatusErrors: true,
 						method: 'POST',
-						url: '=/dbs/{{ $parameter["dbId"] }}/colls/{{ $parameter["collId"] }}/item',
+						url: '=/dbs/{{ $parameter["dbId"] }}/colls/{{ $parameter["collId"] }}/docs',
+						headers: {
+							'Content-Type': 'application/query+json',
+							'x-ms-documentdb-isquery': 'True',
+						},
 					},
 				},
 				action: 'Query items',
@@ -80,15 +92,15 @@ export const itemOperations: INodeProperties[] = [
 			{
 				name: 'Update',
 				value: 'update',
-				description: 'Update an item',
+				description: 'Update an existing item',
 				routing: {
 					request: {
 						ignoreHttpStatusErrors: true,
 						method: 'PATCH',
-						url: '=/dbs/{{ $parameter["dbId"] }}/colls/{{ $parameter["collId"] }}/item/{{ $parameter["id"] }}',
+						url: '=/dbs/{{ $parameter["dbId"] }}/colls/{{ $parameter["collId"] }}/docs/{{ $parameter["id"] }}',
 					},
 				},
-				action: 'Create item',
+				action: 'Update item',
 			},
 		],
 		default: 'getAll',
@@ -538,9 +550,58 @@ export const getAllFields: INodeProperties[] = [
 			},
 		],
 	},
+	{
+		displayName: 'Return All',
+		name: 'returnAll',
+		default: false,
+		description: 'Whether to return all results or only up to a given limit',
+		displayOptions: {
+			show: {
+				resource: ['item'],
+				operation: ['getAll'],
+			},
+		},
+		routing: {
+			send: {
+				preSend: [
+					async function (
+						this: IExecuteSingleFunctions,
+						requestOptions: IHttpRequestOptions,
+					): Promise<IHttpRequestOptions> {
+						return requestOptions;
+					},
+				],
+			},
+		},
+		type: 'boolean',
+	},
+	{
+		displayName: 'Limit',
+		name: 'limit',
+		default: 50,
+		description: 'Max number of results to return',
+		displayOptions: {
+			show: {
+				resource: ['item'],
+				operation: ['getAll'],
+				returnAll: [false],
+			},
+		},
+		routing: {
+			send: {
+				property: 'x-ms-max-item-count',
+				type: 'query',
+				value: '={{ $value }}',
+			},
+		},
+		type: 'number',
+		typeOptions: {
+			minValue: 1,
+		},
+		validateType: 'number',
+	},
 ];
 
-//TO-DO-check-fields
 export const queryFields: INodeProperties[] = [
 	{
 		displayName: 'Database ID',
@@ -631,23 +692,63 @@ export const queryFields: INodeProperties[] = [
 		],
 	},
 	{
-		displayName: 'ID',
-		name: 'id',
+		displayName: 'Query',
+		name: 'query',
 		type: 'string',
 		default: '',
-		placeholder: 'e.g. AndersenFamily',
-		description: "Item's ID",
 		required: true,
+		description: 'The SQL query text to execute',
 		displayOptions: {
 			show: {
 				resource: ['item'],
 				operation: ['query'],
 			},
 		},
+		placeholder: 'SELECT * FROM c WHERE c.name = @name',
 		routing: {
 			send: {
 				type: 'body',
-				property: 'id',
+				property: 'query',
+				value: '={{$value}}',
+			},
+		},
+	},
+	{
+		displayName: 'Parameters',
+		name: 'parameters',
+		type: 'fixedCollection',
+		required: true,
+		default: [],
+		placeholder: 'Add Parameter',
+		typeOptions: {
+			multipleValues: true,
+		},
+		options: [
+			{
+				name: 'parameters',
+				displayName: 'Parameter',
+				values: [
+					{
+						displayName: 'Name',
+						name: 'name',
+						type: 'string',
+						default: '',
+						placeholder: 'e.g., @name',
+					},
+					{
+						displayName: 'Value',
+						name: 'value',
+						type: 'string',
+						default: '',
+						placeholder: 'e.g., John',
+					},
+				],
+			},
+		],
+		routing: {
+			send: {
+				type: 'body',
+				property: 'parameters',
 				value: '={{$value}}',
 			},
 		},
