@@ -10,7 +10,6 @@ import type {
 	INodeListSearchResult,
 } from 'n8n-workflow';
 import { ApplicationError } from 'n8n-workflow';
-import * as querystring from 'querystring';
 
 // export const HeaderConstants = {
 // 	// Required
@@ -49,7 +48,6 @@ export function getAuthorizationTokenUsingMasterKey(
 	masterKey: string,
 ): string {
 	const key = Buffer.from(masterKey, 'base64');
-
 	const payload =
 		`${verb.toLowerCase()}\n` +
 		`${resourceType.toLowerCase()}\n` +
@@ -60,7 +58,7 @@ export function getAuthorizationTokenUsingMasterKey(
 	const hmacSha256 = crypto.createHmac('sha256', key);
 	const hashPayload = hmacSha256.update(payload, 'utf8').digest('base64');
 
-	const authorizationString = querystring.escape(`type=master&ver=1.0&sig=${hashPayload}`);
+	const authorizationString = `type=master&ver=1.0&sig=${hashPayload}`;
 
 	return authorizationString;
 }
@@ -134,6 +132,10 @@ export async function azureCosmosDbRequest(
 	const requestOptions: IHttpRequestOptions = {
 		...opts,
 		baseURL: `https://${databaseAccount}.documents.azure.com`,
+		headers: {
+			Accept: 'application/json',
+			'Content-Type': 'application/json',
+		},
 		json: true,
 	};
 
@@ -150,6 +152,8 @@ export async function azureCosmosDbRequest(
 	};
 
 	try {
+		console.log('Final Request Options before Request:', requestOptions);
+
 		return (await this.helpers.requestWithAuthentication.call(
 			this,
 			'azureCosmosDbSharedKeyApi',
@@ -188,25 +192,9 @@ export async function searchCollections(
 	this: ILoadOptionsFunctions,
 	filter?: string,
 ): Promise<INodeListSearchResult> {
-	const dbId = this.getNodeParameter('dbId') as string;
-	if (!dbId) {
-		throw new ApplicationError('Database ID is required');
-	}
-
-	const credentials = await this.getCredentials('azureCosmosDbSharedKeyApi');
-	const databaseAccount = credentials?.account;
-
-	if (!databaseAccount) {
-		throw new ApplicationError('Account name not found in credentials!', { level: 'error' });
-	}
-
 	const opts: IHttpRequestOptions = {
 		method: 'GET',
-		url: `/dbs/${dbId}/colls`,
-		baseURL: `https://${databaseAccount}.documents.azure.com`,
-		headers: {
-			'Content-Type': 'application/json',
-		},
+		url: '/colls',
 	};
 
 	const responseData: IDataObject = await azureCosmosDbRequest.call(this, opts);
@@ -233,38 +221,36 @@ export async function searchCollections(
 	};
 }
 
-export async function searchDatabases(
-	this: ILoadOptionsFunctions,
-	filter?: string,
-): Promise<INodeListSearchResult> {
-	const opts: IHttpRequestOptions = {
-		method: 'GET',
-		url: '/dbs',
-		headers: {
-			'Content-Type': 'application/json',
-		},
-	};
+// export async function searchDatabases(
+// 	this: ILoadOptionsFunctions,
+// 	filter?: string,
+// ): Promise<INodeListSearchResult> {
 
-	const responseData: IDataObject = await azureCosmosDbRequest.call(this, opts);
+// 	const opts: IHttpRequestOptions = {
+// 		method: 'GET',
+// 		url: '/dbs',
+// 	};
 
-	const responseBody = responseData as {
-		Databases: IDataObject[];
-	};
-	const databases = responseBody.Databases;
+// 	const responseData: IDataObject = await azureCosmosDbRequest.call(this, opts);
+// 	console.log('Got this response', responseData)
+// 	const responseBody = responseData as {
+// 		Databases: IDataObject[];
+// 	};
+// 	const databases = responseBody.Databases;
 
-	if (!databases) {
-		return { results: [] };
-	}
+// 	if (!databases) {
+// 		return { results: [] };
+// 	}
 
-	const results: INodeListSearchItems[] = databases
-		.map((database) => ({
-			name: String(database.id),
-			value: String(database.id),
-		}))
-		.filter((database) => !filter || database.name.includes(filter))
-		.sort((a, b) => a.name.localeCompare(b.name));
+// 	const results: INodeListSearchItems[] = databases
+// 		.map((database) => ({
+// 			name: String(database.id),
+// 			value: String(database.id),
+// 		}))
+// 		.filter((database) => !filter || database.name.includes(filter))
+// 		.sort((a, b) => a.name.localeCompare(b.name));
 
-	return {
-		results,
-	};
-}
+// 	return {
+// 		results,
+// 	};
+// }

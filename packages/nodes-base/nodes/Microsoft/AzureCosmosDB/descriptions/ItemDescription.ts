@@ -22,7 +22,7 @@ export const itemOperations: INodeProperties[] = [
 					request: {
 						ignoreHttpStatusErrors: true,
 						method: 'POST',
-						url: '=/dbs/{{ $parameter["dbId"] }}/colls/{{ $parameter["collId"] }}/docs',
+						url: '=/colls/{{ $parameter["collId"] }}/docs',
 					},
 				},
 				action: 'Create item',
@@ -35,7 +35,7 @@ export const itemOperations: INodeProperties[] = [
 					request: {
 						ignoreHttpStatusErrors: true,
 						method: 'DELETE',
-						url: '=/dbs/{{ $parameter["dbId"] }}/colls/{{ $parameter["collId"] }}/docs/{{ $parameter["id"] }}',
+						url: '=/colls/{{ $parameter["collId"] }}/docs/{{ $parameter["id"] }}',
 					},
 				},
 				action: 'Delete item',
@@ -45,10 +45,20 @@ export const itemOperations: INodeProperties[] = [
 				value: 'get',
 				description: 'Retrieve an item',
 				routing: {
+					send: {
+						preSend: [
+							async function (
+								this: IExecuteSingleFunctions,
+								requestOptions: IHttpRequestOptions,
+							): Promise<IHttpRequestOptions> {
+								return requestOptions;
+							},
+						],
+					},
 					request: {
 						ignoreHttpStatusErrors: true,
 						method: 'GET',
-						url: '=/dbs/{{ $parameter["dbId"] }}/colls/{{ $parameter["collId"] }}/docs/{{ $parameter["id"] }}',
+						url: '=/colls/{{ $parameter["collId"] }}/docs/{{ $parameter["id"] }}',
 					},
 				},
 				action: 'Get item',
@@ -67,7 +77,7 @@ export const itemOperations: INodeProperties[] = [
 					request: {
 						ignoreHttpStatusErrors: true,
 						method: 'GET',
-						url: '=/dbs/{{ $parameter["dbId"] }}/colls/{{ $parameter["collId"] }}/docs',
+						url: '=/colls/{{ $parameter["collId"] }}/docs',
 					},
 				},
 				action: 'Get many items',
@@ -80,7 +90,7 @@ export const itemOperations: INodeProperties[] = [
 					request: {
 						ignoreHttpStatusErrors: true,
 						method: 'POST',
-						url: '=/dbs/{{ $parameter["dbId"] }}/colls/{{ $parameter["collId"] }}/docs',
+						url: '=/colls/{{ $parameter["collId"] }}/docs',
 						headers: {
 							'Content-Type': 'application/query+json',
 							'x-ms-documentdb-isquery': 'True',
@@ -97,7 +107,7 @@ export const itemOperations: INodeProperties[] = [
 					request: {
 						ignoreHttpStatusErrors: true,
 						method: 'PATCH',
-						url: '=/dbs/{{ $parameter["dbId"] }}/colls/{{ $parameter["collId"] }}/docs/{{ $parameter["id"] }}',
+						url: '=/colls/{{ $parameter["collId"] }}/docs/{{ $parameter["id"] }}',
 					},
 				},
 				action: 'Update item',
@@ -108,50 +118,6 @@ export const itemOperations: INodeProperties[] = [
 ];
 
 export const createFields: INodeProperties[] = [
-	{
-		displayName: 'Database ID',
-		name: 'dbId',
-		type: 'resourceLocator',
-		required: true,
-		default: {
-			mode: 'list',
-			value: '',
-		},
-		description: 'Select the database you want to use',
-		displayOptions: {
-			show: {
-				resource: ['item'],
-				operation: ['create'],
-			},
-		},
-		modes: [
-			{
-				displayName: 'From list',
-				name: 'list',
-				type: 'list',
-				typeOptions: {
-					searchListMethod: 'searchDatabases',
-					searchable: true,
-				},
-			},
-			{
-				displayName: 'By Name',
-				name: 'databaseName',
-				type: 'string',
-				hint: 'Enter the database name',
-				validation: [
-					{
-						type: 'regex',
-						properties: {
-							regex: '^[\\w+=,.@-]+$',
-							errorMessage: 'The database name must follow the allowed pattern.',
-						},
-					},
-				],
-				placeholder: 'e.g. UsersDB',
-			},
-		],
-	},
 	{
 		displayName: 'Collection ID',
 		name: 'collId',
@@ -196,28 +162,28 @@ export const createFields: INodeProperties[] = [
 			},
 		],
 	},
-	{
-		displayName: 'ID',
-		name: 'id',
-		type: 'string',
-		default: '',
-		placeholder: 'e.g. AndersenFamily',
-		description: "Item's ID",
-		required: true,
-		displayOptions: {
-			show: {
-				resource: ['item'],
-				operation: ['create'],
-			},
-		},
-		routing: {
-			send: {
-				type: 'body',
-				property: 'id',
-				value: '={{$value}}',
-			},
-		},
-	},
+	// {
+	// 	displayName: 'ID',
+	// 	name: 'id',
+	// 	type: 'string',
+	// 	default: '',
+	// 	placeholder: 'e.g. AndersenFamily',
+	// 	description: "Item's ID",
+	// 	required: true,
+	// 	displayOptions: {
+	// 		show: {
+	// 			resource: ['item'],
+	// 			operation: ['create'],
+	// 		},
+	// 	},
+	// 	routing: {
+	// 		send: {
+	// 			type: 'body',
+	// 			property: 'id',
+	// 			value: '={{$value}}',
+	// 		},
+	// 	},
+	// },
 	{
 		displayName: 'Custom Properties',
 		name: 'customProperties',
@@ -235,58 +201,13 @@ export const createFields: INodeProperties[] = [
 		routing: {
 			send: {
 				type: 'body',
-				property: '',
-				value: '={{$value}}',
+				value: '={{ $json["id"] ? Object.assign({ id: $json["id"] }, $value) : $value }}',
 			},
 		},
 	},
 ];
 
 export const deleteFields: INodeProperties[] = [
-	{
-		displayName: 'Database ID',
-		name: 'dbId',
-		type: 'resourceLocator',
-		required: true,
-		default: {
-			mode: 'list',
-			value: '',
-		},
-		description: 'Select the database you want to use',
-		displayOptions: {
-			show: {
-				resource: ['item'],
-				operation: ['delete'],
-			},
-		},
-		modes: [
-			{
-				displayName: 'From list',
-				name: 'list',
-				type: 'list',
-				typeOptions: {
-					searchListMethod: 'searchDatabases',
-					searchable: true,
-				},
-			},
-			{
-				displayName: 'By Name',
-				name: 'databaseName',
-				type: 'string',
-				hint: 'Enter the database name',
-				validation: [
-					{
-						type: 'regex',
-						properties: {
-							regex: '^[\\w+=,.@-]+$',
-							errorMessage: 'The database name must follow the allowed pattern.',
-						},
-					},
-				],
-				placeholder: 'e.g. UsersDB',
-			},
-		],
-	},
 	{
 		displayName: 'Collection ID',
 		name: 'collId',
@@ -350,50 +271,6 @@ export const deleteFields: INodeProperties[] = [
 
 export const getFields: INodeProperties[] = [
 	{
-		displayName: 'Database ID',
-		name: 'dbId',
-		type: 'resourceLocator',
-		required: true,
-		default: {
-			mode: 'list',
-			value: '',
-		},
-		description: 'Select the database you want to use',
-		displayOptions: {
-			show: {
-				resource: ['item'],
-				operation: ['get'],
-			},
-		},
-		modes: [
-			{
-				displayName: 'From list',
-				name: 'list',
-				type: 'list',
-				typeOptions: {
-					searchListMethod: 'searchDatabases',
-					searchable: true,
-				},
-			},
-			{
-				displayName: 'By Name',
-				name: 'databaseName',
-				type: 'string',
-				hint: 'Enter the database name',
-				validation: [
-					{
-						type: 'regex',
-						properties: {
-							regex: '^[\\w+=,.@-]+$',
-							errorMessage: 'The database name must follow the allowed pattern.',
-						},
-					},
-				],
-				placeholder: 'e.g. UsersDB',
-			},
-		],
-	},
-	{
 		displayName: 'Collection ID',
 		name: 'collId',
 		type: 'resourceLocator',
@@ -451,61 +328,10 @@ export const getFields: INodeProperties[] = [
 				operation: ['get'],
 			},
 		},
-		routing: {
-			send: {
-				type: 'body',
-				property: 'id',
-				value: '={{$value}}',
-			},
-		},
 	},
 ];
 
 export const getAllFields: INodeProperties[] = [
-	{
-		displayName: 'Database ID',
-		name: 'dbId',
-		type: 'resourceLocator',
-		required: true,
-		default: {
-			mode: 'list',
-			value: '',
-		},
-		description: 'Select the database you want to use',
-		displayOptions: {
-			show: {
-				resource: ['item'],
-				operation: ['getAll'],
-			},
-		},
-		modes: [
-			{
-				displayName: 'From list',
-				name: 'list',
-				type: 'list',
-				typeOptions: {
-					searchListMethod: 'searchDatabases',
-					searchable: true,
-				},
-			},
-			{
-				displayName: 'By Name',
-				name: 'databaseName',
-				type: 'string',
-				hint: 'Enter the database name',
-				validation: [
-					{
-						type: 'regex',
-						properties: {
-							regex: '^[\\w+=,.@-]+$',
-							errorMessage: 'The database name must follow the allowed pattern.',
-						},
-					},
-				],
-				placeholder: 'e.g. UsersDB',
-			},
-		],
-	},
 	{
 		displayName: 'Collection ID',
 		name: 'collId',
@@ -561,18 +387,6 @@ export const getAllFields: INodeProperties[] = [
 				operation: ['getAll'],
 			},
 		},
-		routing: {
-			send: {
-				preSend: [
-					async function (
-						this: IExecuteSingleFunctions,
-						requestOptions: IHttpRequestOptions,
-					): Promise<IHttpRequestOptions> {
-						return requestOptions;
-					},
-				],
-			},
-		},
 		type: 'boolean',
 	},
 	{
@@ -603,50 +417,6 @@ export const getAllFields: INodeProperties[] = [
 ];
 
 export const queryFields: INodeProperties[] = [
-	{
-		displayName: 'Database ID',
-		name: 'dbId',
-		type: 'resourceLocator',
-		required: true,
-		default: {
-			mode: 'list',
-			value: '',
-		},
-		description: 'Select the database you want to use',
-		displayOptions: {
-			show: {
-				resource: ['item'],
-				operation: ['query'],
-			},
-		},
-		modes: [
-			{
-				displayName: 'From list',
-				name: 'list',
-				type: 'list',
-				typeOptions: {
-					searchListMethod: 'searchDatabases',
-					searchable: true,
-				},
-			},
-			{
-				displayName: 'By Name',
-				name: 'databaseName',
-				type: 'string',
-				hint: 'Enter the database name',
-				validation: [
-					{
-						type: 'regex',
-						properties: {
-							regex: '^[\\w+=,.@-]+$',
-							errorMessage: 'The database name must follow the allowed pattern.',
-						},
-					},
-				],
-				placeholder: 'e.g. UsersDB',
-			},
-		],
-	},
 	{
 		displayName: 'Collection ID',
 		name: 'collId',
@@ -723,6 +493,12 @@ export const queryFields: INodeProperties[] = [
 		typeOptions: {
 			multipleValues: true,
 		},
+		displayOptions: {
+			show: {
+				resource: ['item'],
+				operation: ['query'],
+			},
+		},
 		options: [
 			{
 				name: 'parameters',
@@ -756,50 +532,6 @@ export const queryFields: INodeProperties[] = [
 ];
 
 export const updateFields: INodeProperties[] = [
-	{
-		displayName: 'Database ID',
-		name: 'dbId',
-		type: 'resourceLocator',
-		required: true,
-		default: {
-			mode: 'list',
-			value: '',
-		},
-		description: 'Select the database you want to use',
-		displayOptions: {
-			show: {
-				resource: ['item'],
-				operation: ['update'],
-			},
-		},
-		modes: [
-			{
-				displayName: 'From list',
-				name: 'list',
-				type: 'list',
-				typeOptions: {
-					searchListMethod: 'searchDatabases',
-					searchable: true,
-				},
-			},
-			{
-				displayName: 'By Name',
-				name: 'databaseName',
-				type: 'string',
-				hint: 'Enter the database name',
-				validation: [
-					{
-						type: 'regex',
-						properties: {
-							regex: '^[\\w+=,.@-]+$',
-							errorMessage: 'The database name must follow the allowed pattern.',
-						},
-					},
-				],
-				placeholder: 'e.g. UsersDB',
-			},
-		],
-	},
 	{
 		displayName: 'Collection ID',
 		name: 'collId',

@@ -3,7 +3,7 @@ import { NodeConnectionType } from 'n8n-workflow';
 
 import { containerFields, containerOperations } from './descriptions/ContainerDescription';
 import { itemFields, itemOperations } from './descriptions/ItemDescription';
-import { searchCollections, searchDatabases } from './GenericFunctions';
+import { searchCollections } from './GenericFunctions';
 
 export class AzureCosmosDb implements INodeType {
 	description: INodeTypeDescription = {
@@ -34,9 +34,10 @@ export class AzureCosmosDb implements INodeType {
 			},
 		],
 		requestDefaults: {
-			baseURL: '=https://{$credentials.account}.documents.azure.com',
+			baseURL: '={{$credentials.baseUrl}}',
 			headers: {
 				Accept: 'application/json',
+				'Content-Type': 'application/json',
 			},
 		},
 		properties: [
@@ -79,7 +80,6 @@ export class AzureCosmosDb implements INodeType {
 	methods = {
 		listSearch: {
 			searchCollections,
-			searchDatabases,
 		},
 	};
 }

@@ -20,7 +20,7 @@ export const containerOperations: INodeProperties[] = [
 					request: {
 						ignoreHttpStatusErrors: true,
 						method: 'POST',
-						url: '=/dbs/{{ $parameter["dbId"] }}/colls',
+						url: '/colls',
 					},
 				},
 				action: 'Create container',
@@ -33,7 +33,7 @@ export const containerOperations: INodeProperties[] = [
 					request: {
 						ignoreHttpStatusErrors: true,
 						method: 'DELETE',
-						url: '=/dbs/{{ $parameter["dbId"] }}/colls/{{ $parameter["collId"] }}',
+						url: '=/colls/{{ $parameter["collId"] }}',
 					},
 				},
 				action: 'Delete container',
@@ -46,7 +46,7 @@ export const containerOperations: INodeProperties[] = [
 					request: {
 						ignoreHttpStatusErrors: true,
 						method: 'GET',
-						url: '=/dbs/{{ $parameter["dbId"] }}/colls/{{ $parameter["collId"] }}',
+						url: '=/colls/{{ $parameter["collId"] }}',
 					},
 				},
 				action: 'Get container',
@@ -59,7 +59,7 @@ export const containerOperations: INodeProperties[] = [
 					request: {
 						ignoreHttpStatusErrors: true,
 						method: 'GET',
-						url: '=/dbs/{{ $parameter["dbId"] }}/colls',
+						url: '/colls',
 					},
 				},
 				action: 'Get many containers',
@@ -70,50 +70,6 @@ export const containerOperations: INodeProperties[] = [
 ];
 
 export const createFields: INodeProperties[] = [
-	{
-		displayName: 'Database ID',
-		name: 'dbId',
-		type: 'resourceLocator',
-		required: true,
-		default: {
-			mode: 'list',
-			value: '',
-		},
-		description: 'Select the database you want to use',
-		displayOptions: {
-			show: {
-				resource: ['container'],
-				operation: ['create'],
-			},
-		},
-		modes: [
-			{
-				displayName: 'From list',
-				name: 'list',
-				type: 'list',
-				typeOptions: {
-					searchListMethod: 'searchDatabases',
-					searchable: true,
-				},
-			},
-			{
-				displayName: 'By Name',
-				name: 'databaseName',
-				type: 'string',
-				hint: 'Enter the database name',
-				validation: [
-					{
-						type: 'regex',
-						properties: {
-							regex: '^[\\w+=,.@-]+$',
-							errorMessage: 'The database name must follow the allowed pattern.',
-						},
-					},
-				],
-				placeholder: 'e.g. UsersDB',
-			},
-		],
-	},
 	{
 		displayName: 'ID',
 		name: 'id',
@@ -185,6 +141,45 @@ export const createFields: INodeProperties[] = [
 					},
 				},
 			},
+			{
+				displayName: 'Max RU/s (for Autoscale)',
+				name: 'maxThroughput',
+				type: 'number',
+				default: 1000,
+				description: 'The user specified autoscale max RU/s',
+				displayOptions: {
+					show: {
+						offerThroughput: [undefined],
+					},
+				},
+				routing: {
+					send: {
+						type: 'query',
+						property: 'x-ms-cosmos-offer-autopilot-settings',
+						value: '={{"{"maxThroughput": " + $value + "}"}',
+					},
+				},
+			},
+			{
+				displayName: 'Max RU/s (for Manual Throughput)',
+				name: 'offerThroughput',
+				type: 'number',
+				default: 400,
+				description:
+					'The user specified manual throughput (RU/s) for the collection expressed in units of 100 request units per second',
+				displayOptions: {
+					show: {
+						maxThroughput: [undefined],
+					},
+				},
+				routing: {
+					send: {
+						type: 'query',
+						property: 'x-ms-offer-throughput',
+						value: '={{$value}}',
+					},
+				},
+			},
 		],
 		placeholder: 'Add Option',
 		type: 'collection',
@@ -192,50 +187,6 @@ export const createFields: INodeProperties[] = [
 ];
 
 export const getFields: INodeProperties[] = [
-	{
-		displayName: 'Database ID',
-		name: 'dbId',
-		type: 'resourceLocator',
-		required: true,
-		default: {
-			mode: 'list',
-			value: '',
-		},
-		description: 'Select the database you want to use',
-		displayOptions: {
-			show: {
-				resource: ['container'],
-				operation: ['get'],
-			},
-		},
-		modes: [
-			{
-				displayName: 'From list',
-				name: 'list',
-				type: 'list',
-				typeOptions: {
-					searchListMethod: 'searchDatabases',
-					searchable: true,
-				},
-			},
-			{
-				displayName: 'By Name',
-				name: 'databaseName',
-				type: 'string',
-				hint: 'Enter the database name',
-				validation: [
-					{
-						type: 'regex',
-						properties: {
-							regex: '^[\\w+=,.@-]+$',
-							errorMessage: 'The database name must follow the allowed pattern.',
-						},
-					},
-				],
-				placeholder: 'e.g. UsersDB',
-			},
-		],
-	},
 	{
 		displayName: 'Container ID',
 		name: 'collId',
@@ -282,98 +233,9 @@ export const getFields: INodeProperties[] = [
 	},
 ];
 
-export const getAllFields: INodeProperties[] = [
-	{
-		displayName: 'Database ID',
-		name: 'dbId',
-		type: 'resourceLocator',
-		required: true,
-		default: {
-			mode: 'list',
-			value: '',
-		},
-		description: 'Select the database you want to use',
-		displayOptions: {
-			show: {
-				resource: ['container'],
-				operation: ['getAll'],
-			},
-		},
-		modes: [
-			{
-				displayName: 'From list',
-				name: 'list',
-				type: 'list',
-				typeOptions: {
-					searchListMethod: 'searchDatabases',
-					searchable: true,
-				},
-			},
-			{
-				displayName: 'By Name',
-				name: 'databaseName',
-				type: 'string',
-				hint: 'Enter the database name',
-				validation: [
-					{
-						type: 'regex',
-						properties: {
-							regex: '^[\\w+=,.@-]+$',
-							errorMessage: 'The database name must follow the allowed pattern.',
-						},
-					},
-				],
-				placeholder: 'e.g. UsersDB',
-			},
-		],
-	},
-];
+export const getAllFields: INodeProperties[] = [];
 
 export const deleteFields: INodeProperties[] = [
-	{
-		displayName: 'Database ID',
-		name: 'dbId',
-		type: 'resourceLocator',
-		required: true,
-		default: {
-			mode: 'list',
-			value: '',
-		},
-		description: 'Select the database you want to use',
-		displayOptions: {
-			show: {
-				resource: ['container'],
-				operation: ['delete'],
-			},
-		},
-		modes: [
-			{
-				displayName: 'From list',
-				name: 'list',
-				type: 'list',
-				typeOptions: {
-					searchListMethod: 'searchDatabases',
-					searchable: true,
-				},
-			},
-			{
-				displayName: 'By Name',
-				name: 'databaseName',
-				type: 'string',
-				hint: 'Enter the database name',
-				validation: [
-					{
-						type: 'regex',
-						properties: {
-							regex: '^[\\w+=,.@-]+$',
-							errorMessage: 'The database name must follow the allowed pattern.',
-						},
-					},
-				],
-				placeholder: 'e.g. UsersDB',
-			},
-		],
-	},
 	{
 		displayName: 'Container ID',
 		name: 'collId',

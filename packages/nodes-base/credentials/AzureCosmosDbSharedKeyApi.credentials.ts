@@ -33,12 +33,27 @@ export class AzureCosmosDbSharedKeyApi implements ICredentialType {
 			},
 			default: '',
 		},
+		{
+			displayName: 'Database',
+			name: 'database',
+			description: 'Database name',
+			type: 'string',
+			default: '',
+		},
+		{
+			displayName: 'Base URL',
+			name: 'baseUrl',
+			type: 'hidden',
+			default: '=https://{{ $self["account"] }}.documents.azure.com/dbs/{{ $self["database"] }}',
+		},
 	];
 
 	async authenticate(
 		credentials: ICredentialDataDecryptedObject,
 		requestOptions: IHttpRequestOptions,
 	): Promise<IHttpRequestOptions> {
+		console.log('Authenticate invoked with requestOptions:', requestOptions);
+
 		if (requestOptions.qs) {
 			for (const [key, value] of Object.entries(requestOptions.qs)) {
 				if (value === undefined) {
@@ -52,7 +67,7 @@ export class AzureCosmosDbSharedKeyApi implements ICredentialType {
 		requestOptions.headers = {
 			...requestOptions.headers,
 			'x-ms-date': date,
-			'x-ms-version': '2020-04-08',
+			'x-ms-version': '2018-12-31',
 		};
 
 		if (credentials.sessionToken) {
@@ -60,40 +75,16 @@ export class AzureCosmosDbSharedKeyApi implements ICredentialType {
 		}
 
 		let resourceType = '';
-		let resourceLink = '';
-		if (requestOptions.body && typeof requestOptions.body === 'object') {
-			const isCollectionRequest = 'colls' in requestOptions.body;
-			const isDocumentRequest = 'docs' in requestOptions.body;
+		const resourceLink = requestOptions.url;
 
-			if (isCollectionRequest) {
-				resourceType = 'dbs';
-				resourceLink = `dbs/${credentials.database}/colls`;
-			} else if (isDocumentRequest) {
-				resourceType = 'colls';
-				const collId = requestOptions.qs?.collId || '';
-				if (!collId) {
-					throw new ApplicationError('Collection ID (collId) is required for document requests.');
-				}
-				resourceLink = `dbs/${credentials.database}/colls/${collId}/docs`;
-			}
-		} else if (requestOptions.qs && typeof requestOptions.qs === 'object') {
-			const queryType = requestOptions.qs.queryType;
-
-			if (queryType === 'colls') {
-				resourceType = 'dbs';
-				resourceLink = `dbs/${credentials.database}/colls`;
-			} else if (queryType === 'docs') {
-				resourceType = 'colls';
-				const collId = requestOptions.qs.collId || '';
-				if (!collId) {
-					throw new ApplicationError('Collection ID (collId) is required for document queries.');
-				}
-				resourceLink = `dbs/${credentials.database}/colls/${collId}/docs`;
-			}
+		if (resourceLink.includes('/colls')) {
+			resourceType = 'colls';
+		} else if (resourceLink.includes('/docs')) {
+			resourceType = 'docs';
+		} else if (resourceLink.includes('/dbs')) {
+			resourceType = 'dbs';
 		} else {
-			throw new ApplicationError(
-				'Invalid requestOptions: Either body or query string (qs) is required.',
-			);
+			throw new ApplicationError('Unable to determine resourceType');
 		}
 
 		if (requestOptions.method) {
@@ -105,8 +96,10 @@ export class AzureCosmosDbSharedKeyApi implements ICredentialType {
 				credentials.key as string,
 			);
 
-			requestOptions.headers.authorization = authToken;
+			requestOptions.headers.Authorization = authToken;
 		}
+
+		console.log('Final requestOptions headers:', requestOptions.headers);
 
 		return requestOptions;
 	}
