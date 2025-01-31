@@ -7,8 +7,8 @@ import { searchCollections } from './GenericFunctions';
 
 export class AzureCosmosDb implements INodeType {
 	description: INodeTypeDescription = {
-		displayName: 'Azure Cosmos DB',
-		name: 'azureCosmosDb',
+		displayName: 'Cosmos DB',
+		name: 'cosmosDb',
 		icon: {
 			light: 'file:CosmosDB.svg',
 			dark: 'file:CosmosDB.svg',
@@ -24,7 +24,7 @@ export class AzureCosmosDb implements INodeType {
 		outputs: [NodeConnectionType.Main],
 		credentials: [
 			{
-				name: 'azureCosmosDbSharedKeyApi',
+				name: 'microsoftCosmosDbSharedKeyApi',
 				required: true,
 				displayOptions: {
 					show: {

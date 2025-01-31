@@ -6,14 +6,17 @@ import {
 	type INodeProperties,
 } from 'n8n-workflow';
 
-import { getAuthorizationTokenUsingMasterKey } from '../nodes/Microsoft/AzureCosmosDB/GenericFunctions';
+import {
+	getAuthorizationTokenUsingMasterKey,
+	HeaderConstants,
+} from '../nodes/Microsoft/CosmosDB/GenericFunctions';
 
-export class AzureCosmosDbSharedKeyApi implements ICredentialType {
-	name = 'azureCosmosDbSharedKeyApi';
+export class MicrosoftCosmosDbSharedKeyApi implements ICredentialType {
+	name = 'microsoftCosmosDbSharedKeyApi';
 
 	displayName = 'Azure Cosmos DB API';
 
-	documentationUrl = 'azureCosmosDb';
+	documentationUrl = 'microsoftCosmosDb';
 
 	properties: INodeProperties[] = [
 		{
@@ -75,8 +78,9 @@ export class AzureCosmosDbSharedKeyApi implements ICredentialType {
 		}
 
 		let resourceType = '';
-		const resourceLink = requestOptions.url;
+		const resourceLink = '/dbs/first_database_1' + requestOptions.url;
 
+		console.log('Link', resourceLink);
 		if (resourceLink.includes('/colls')) {
 			resourceType = 'colls';
 		} else if (resourceLink.includes('/docs')) {
@@ -86,6 +90,7 @@ export class AzureCosmosDbSharedKeyApi implements ICredentialType {
 		} else {
 			throw new ApplicationError('Unable to determine resourceType');
 		}
+		console.log('Type', resourceType);
 
 		if (requestOptions.method) {
 			const authToken = getAuthorizationTokenUsingMasterKey(
@@ -96,10 +101,10 @@ export class AzureCosmosDbSharedKeyApi implements ICredentialType {
 				credentials.key as string,
 			);
 
-			requestOptions.headers.Authorization = authToken;
+			requestOptions.headers[HeaderConstants.AUTHORIZATION] = authToken;
 		}
 
-		console.log('Final requestOptions headers:', requestOptions.headers);
+		console.log('Final requestOptions:', requestOptions);
 
 		return requestOptions;
 	}

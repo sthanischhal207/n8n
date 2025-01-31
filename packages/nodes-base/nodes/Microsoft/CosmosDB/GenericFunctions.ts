@@ -11,34 +11,34 @@ import type {
 } from 'n8n-workflow';
 import { ApplicationError } from 'n8n-workflow';
 
-// export const HeaderConstants = {
-// 	// Required
-// 	AUTHORIZATION: 'Authorization',
-// 	CONTENT_TYPE: 'Content-Type',
-// 	X_MS_DATE: 'x-ms-date',
-// 	X_MS_VERSION: 'x-ms-version',
+export const HeaderConstants = {
+	// Required
+	AUTHORIZATION: 'Authorization',
+	CONTENT_TYPE: 'Content-Type',
+	X_MS_DATE: 'x-ms-date',
+	X_MS_VERSION: 'x-ms-version',
 
-// 	//Required - for session consistency only
-// 	X_MS_SESSION_TOKEN: 'x-ms-session-token',
+	//Required - for session consistency only
+	X_MS_SESSION_TOKEN: 'x-ms-session-token',
 
-// 	// Optional
-// 	IF_MATCH: 'If-Match',
-// 	IF_NONE_MATCH: 'If-None-Match',
-// 	IF_MODIFIED_SINCE: 'If-Modified-Since',
-// 	USER_AGENT: 'User-Agent',
-// 	X_MS_ACTIVITY_ID: 'x-ms-activity-id',
-// 	X_MS_CONSISTENCY_LEVEL: 'x-ms-consistency-level',
-// 	X_MS_CONTINUATION: 'x-ms-continuation',
-// 	X_MS_MAX_ITEM_COUNT: 'x-ms-max-item-count',
-// 	X_MS_DOCUMENTDB_PARTITIONKEY: 'x-ms-documentdb-partitionkey',
-// 	X_MS_DOCUMENTDB_ISQUERY: 'x-ms-documentdb-isquery',
-// 	X_MS_DOCUMENTDB_QUERY_ENABLECROSSPARTITION: 'x-ms-documentdb-query-enablecrosspartition',
-// 	A_IM: 'A-IM',
-// 	X_MS_DOCUMENTDB_PARTITIONKEYRANGEID: 'x-ms-documentdb-partitionkeyrangeid',
-// 	X_MS_COSMOS_ALLOW_TENTATIVE_WRITES: 'x-ms-cosmos-allow-tentative-writes',
+	// Optional
+	IF_MATCH: 'If-Match',
+	IF_NONE_MATCH: 'If-None-Match',
+	IF_MODIFIED_SINCE: 'If-Modified-Since',
+	USER_AGENT: 'User-Agent',
+	X_MS_ACTIVITY_ID: 'x-ms-activity-id',
+	X_MS_CONSISTENCY_LEVEL: 'x-ms-consistency-level',
+	X_MS_CONTINUATION: 'x-ms-continuation',
+	X_MS_MAX_ITEM_COUNT: 'x-ms-max-item-count',
+	X_MS_DOCUMENTDB_PARTITIONKEY: 'x-ms-documentdb-partitionkey',
+	X_MS_DOCUMENTDB_ISQUERY: 'x-ms-documentdb-isquery',
+	X_MS_DOCUMENTDB_QUERY_ENABLECROSSPARTITION: 'x-ms-documentdb-query-enablecrosspartition',
+	A_IM: 'A-IM',
+	X_MS_DOCUMENTDB_PARTITIONKEYRANGEID: 'x-ms-documentdb-partitionkeyrangeid',
+	X_MS_COSMOS_ALLOW_TENTATIVE_WRITES: 'x-ms-cosmos-allow-tentative-writes',
 
-// 	PREFIX_FOR_STORAGE: 'x-ms-',
-// };
+	PREFIX_FOR_STORAGE: 'x-ms-',
+};
 
 export function getAuthorizationTokenUsingMasterKey(
 	verb: string,
@@ -52,15 +52,13 @@ export function getAuthorizationTokenUsingMasterKey(
 		`${verb.toLowerCase()}\n` +
 		`${resourceType.toLowerCase()}\n` +
 		`${resourceLink}\n` +
-		`${date.toLowerCase()}\n` +
+		`${date}\n` +
 		'\n';
 
 	const hmacSha256 = crypto.createHmac('sha256', key);
 	const hashPayload = hmacSha256.update(payload, 'utf8').digest('base64');
 
-	const authorizationString = `type=master&ver=1.0&sig=${hashPayload}`;
-
-	return authorizationString;
+	return encodeURIComponent('type=master&ver=1.0&sig=' + hashPayload);
 }
 
 export async function handlePagination(
@@ -118,11 +116,11 @@ export async function handlePagination(
 	return aggregatedResult.map((result) => ({ json: result }));
 }
 
-export async function azureCosmosDbRequest(
+export async function microsoftCosmosDbRequest(
 	this: ILoadOptionsFunctions,
 	opts: IHttpRequestOptions,
 ): Promise<IDataObject> {
-	const credentials = await this.getCredentials('azureCosmosDbSharedKeyApi');
+	const credentials = await this.getCredentials('microsoftCosmosDbSharedKeyApi');
 	const databaseAccount = credentials?.account;
 
 	if (!databaseAccount) {
@@ -131,7 +129,7 @@ export async function azureCosmosDbRequest(
 
 	const requestOptions: IHttpRequestOptions = {
 		...opts,
-		baseURL: `https://${databaseAccount}.documents.azure.com`,
+		baseURL: `${credentials.baseUrl}`,
 		headers: {
 			Accept: 'application/json',
 			'Content-Type': 'application/json',
@@ -156,7 +154,7 @@ export async function azureCosmosDbRequest(
 
 		return (await this.helpers.requestWithAuthentication.call(
 			this,
-			'azureCosmosDbSharedKeyApi',
+			'microsoftCosmosDbSharedKeyApi',
 			requestOptions,
 		)) as IDataObject;
 	} catch (error) {
@@ -197,7 +195,7 @@ export async function searchCollections(
 		url: '/colls',
 	};
 
-	const responseData: IDataObject = await azureCosmosDbRequest.call(this, opts);
+	const responseData: IDataObject = await microsoftCosmosDbRequest.call(this, opts);
 
 	const responseBody = responseData as {
 		DocumentCollections: IDataObject[];
@@ -220,37 +218,3 @@ export async function searchCollections(
 		results,
 	};
 }
-
-// export async function searchDatabases(
-// 	this: ILoadOptionsFunctions,
-// 	filter?: string,
-// ): Promise<INodeListSearchResult> {
-
-// 	const opts: IHttpRequestOptions = {
-// 		method: 'GET',
-// 		url: '/dbs',
-// 	};
-
-// 	const responseData: IDataObject = await azureCosmosDbRequest.call(this, opts);
-// 	console.log('Got this response', responseData)
-// 	const responseBody = responseData as {
-// 		Databases: IDataObject[];
-// 	};
-// 	const databases = responseBody.Databases;
-
-// 	if (!databases) {
-// 		return { results: [] };
-// 	}
-
-// 	const results: INodeListSearchItems[] = databases
-// 		.map((database) => ({
-// 			name: String(database.id),
-// 			value: String(database.id),
-// 		}))
-// 		.filter((database) => !filter || database.name.includes(filter))
-// 		.sort((a, b) => a.name.localeCompare(b.name));
-
-// 	return {
-// 		results,
-// 	};
-// }

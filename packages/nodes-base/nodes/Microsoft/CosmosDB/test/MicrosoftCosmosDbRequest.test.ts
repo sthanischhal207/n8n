@@ -1,6 +1,6 @@
-import { azureCosmosDbRequest } from '../GenericFunctions';
+import { microsoftCosmosDbRequest } from '../GenericFunctions';
 
-describe('GenericFunctions - azureCosmosDbRequest', () => {
+describe('GenericFunctions - microsoftCosmosDbRequest', () => {
 	let mockContext: any;
 	let mockRequestWithAuthentication: jest.Mock;
 
@@ -17,6 +17,12 @@ describe('GenericFunctions - azureCosmosDbRequest', () => {
 	test('should make a successful request with correct options', async () => {
 		mockRequestWithAuthentication.mockResolvedValueOnce({ success: true });
 		(mockContext.getCredentials as jest.Mock).mockResolvedValueOnce({ account: 'us-east-1' });
+		(mockContext.getCredentials as jest.Mock).mockResolvedValueOnce({
+			database: 'first_database_1',
+		});
+		(mockContext.getCredentials as jest.Mock).mockResolvedValueOnce({
+			baseUrl: 'https://us-east-1.documents.azure.com/dbs',
+		});
 
 		const requestOptions = {
 			method: 'GET' as const,
@@ -26,13 +32,13 @@ describe('GenericFunctions - azureCosmosDbRequest', () => {
 			},
 		};
 
-		const result = await azureCosmosDbRequest.call(mockContext, requestOptions);
+		const result = await microsoftCosmosDbRequest.call(mockContext, requestOptions);
 
 		expect(mockRequestWithAuthentication).toHaveBeenCalledWith(
-			'azureCosmosDbSharedKeyApi',
+			'microsoftCosmosDbSharedKeyApi',
 			expect.objectContaining({
 				method: 'GET',
-				baseURL: 'https://us-east-1.documents.azure.com',
+				baseURL: 'https://us-east-1.documents.azure.com/dbs/first_database_1',
 				url: '/example-endpoint',
 				headers: expect.objectContaining({
 					'Content-Type': 'application/json',
@@ -55,7 +61,7 @@ describe('GenericFunctions - azureCosmosDbRequest', () => {
 			},
 		};
 
-		await expect(azureCosmosDbRequest.call(mockContext, requestOptions)).rejects.toThrow(
+		await expect(microsoftCosmosDbRequest.call(mockContext, requestOptions)).rejects.toThrow(
 			'Database account not found in credentials!',
 		);
 
@@ -81,7 +87,7 @@ describe('GenericFunctions - azureCosmosDbRequest', () => {
 			},
 		};
 
-		await expect(azureCosmosDbRequest.call(mockContext, requestOptions)).rejects.toThrow(
+		await expect(microsoftCosmosDbRequest.call(mockContext, requestOptions)).rejects.toThrow(
 			'The Cosmos DB credentials are not valid!',
 		);
 
@@ -107,7 +113,7 @@ describe('GenericFunctions - azureCosmosDbRequest', () => {
 			},
 		};
 
-		await expect(azureCosmosDbRequest.call(mockContext, requestOptions)).rejects.toThrow(
+		await expect(microsoftCosmosDbRequest.call(mockContext, requestOptions)).rejects.toThrow(
 			'The Cosmos DB credentials are not valid!',
 		);
 
@@ -133,7 +139,7 @@ describe('GenericFunctions - azureCosmosDbRequest', () => {
 			},
 		};
 
-		await expect(azureCosmosDbRequest.call(mockContext, requestOptions)).rejects.toThrow(
+		await expect(microsoftCosmosDbRequest.call(mockContext, requestOptions)).rejects.toThrow(
 			'The requested resource was not found!',
 		);
 
@@ -155,7 +161,7 @@ describe('GenericFunctions - azureCosmosDbRequest', () => {
 			},
 		};
 
-		await expect(azureCosmosDbRequest.call(mockContext, requestOptions)).rejects.toThrow(
+		await expect(microsoftCosmosDbRequest.call(mockContext, requestOptions)).rejects.toThrow(
 			'Cosmos DB error response [500]: Internal Server Error',
 		);
 
@@ -176,7 +182,7 @@ describe('GenericFunctions - azureCosmosDbRequest', () => {
 			},
 		};
 
-		await expect(azureCosmosDbRequest.call(mockContext, requestOptions)).rejects.toThrow(
+		await expect(microsoftCosmosDbRequest.call(mockContext, requestOptions)).rejects.toThrow(
 			'Cosmos DB error response [undefined]: Unexpected failure',
 		);
 
