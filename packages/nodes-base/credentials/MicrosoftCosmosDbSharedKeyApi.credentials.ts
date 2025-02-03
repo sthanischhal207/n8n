@@ -55,8 +55,7 @@ export class MicrosoftCosmosDbSharedKeyApi implements ICredentialType {
 		credentials: ICredentialDataDecryptedObject,
 		requestOptions: IHttpRequestOptions,
 	): Promise<IHttpRequestOptions> {
-		console.log('Authenticate invoked with requestOptions:', requestOptions);
-
+		// Remove undefined query parameters?
 		if (requestOptions.qs) {
 			for (const [key, value] of Object.entries(requestOptions.qs)) {
 				if (value === undefined) {
@@ -65,38 +64,54 @@ export class MicrosoftCosmosDbSharedKeyApi implements ICredentialType {
 			}
 		}
 
+		// Add headers for date and version
 		requestOptions.headers ??= {};
-		const date = new Date().toUTCString();
+		const date = new Date().toUTCString().toLowerCase();
 		requestOptions.headers = {
 			...requestOptions.headers,
 			'x-ms-date': date,
 			'x-ms-version': '2018-12-31',
+			'x-ms-partitionkey': '[]',
 		};
 
 		if (credentials.sessionToken) {
 			requestOptions.headers['x-ms-session-token'] = credentials.sessionToken;
 		}
 
-		let resourceType = '';
-		const resourceLink = '/dbs/first_database_1' + requestOptions.url;
+		// This shouldn't be the full url
+		// Refer to https://stackoverflow.com/questions/45645389/documentdb-rest-api-authorization-token-error
 
-		console.log('Link', resourceLink);
-		if (resourceLink.includes('/colls')) {
-			resourceType = 'colls';
-		} else if (resourceLink.includes('/docs')) {
+		const url = new URL(requestOptions.baseURL + requestOptions.url);
+		const pathSegments = url.pathname.split('/').filter((segment) => segment);
+		console.log('Filtered Path Segments:', pathSegments);
+
+		let resourceType = '';
+		let resourceId = '';
+
+		if (pathSegments.includes('docs')) {
+			const docsIndex = pathSegments.lastIndexOf('docs');
 			resourceType = 'docs';
-		} else if (resourceLink.includes('/dbs')) {
+			resourceId = pathSegments.slice(0, docsIndex).join('/');
+		} else if (pathSegments.includes('colls')) {
+			const collsIndex = pathSegments.lastIndexOf('colls');
+			resourceType = 'colls';
+			resourceId = pathSegments.slice(0, collsIndex).join('/');
+		} else if (pathSegments.includes('dbs')) {
+			const dbsIndex = pathSegments.lastIndexOf('dbs');
 			resourceType = 'dbs';
+			resourceId = pathSegments.slice(0, dbsIndex + 2).join('/');
 		} else {
-			throw new ApplicationError('Unable to determine resourceType');
+			throw new ApplicationError('Unable to determine resourceType and resourceId from the URL.');
 		}
-		console.log('Type', resourceType);
+
+		console.log('resourceId', resourceId);
+		console.log('resourceType', resourceType);
 
 		if (requestOptions.method) {
 			const authToken = getAuthorizationTokenUsingMasterKey(
 				requestOptions.method,
 				resourceType,
-				resourceLink,
+				resourceId,
 				date,
 				credentials.key as string,
 			);

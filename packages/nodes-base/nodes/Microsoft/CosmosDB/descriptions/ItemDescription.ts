@@ -23,6 +23,9 @@ export const itemOperations: INodeProperties[] = [
 						ignoreHttpStatusErrors: true,
 						method: 'POST',
 						url: '=/colls/{{ $parameter["collId"] }}/docs',
+						headers: {
+							// 'x-ms-documentdb-partitionkey': '={{$parameter["partitionKey"]}}',
+						},
 					},
 				},
 				action: 'Create item',
@@ -108,6 +111,9 @@ export const itemOperations: INodeProperties[] = [
 						ignoreHttpStatusErrors: true,
 						method: 'PATCH',
 						url: '=/colls/{{ $parameter["collId"] }}/docs/{{ $parameter["id"] }}',
+						headers: {
+							'Content-Type': 'application/json-patch+json',
+						},
 					},
 				},
 				action: 'Update item',
@@ -198,10 +204,11 @@ export const createFields: INodeProperties[] = [
 				operation: ['create'],
 			},
 		},
+		//To-Do-add preSend function
 		routing: {
 			send: {
 				type: 'body',
-				value: '={{ $json["id"] ? Object.assign({ id: $json["id"] }, $value) : $value }}',
+				value: '={{$value}}',
 			},
 		},
 	},

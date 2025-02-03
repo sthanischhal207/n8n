@@ -21,6 +21,9 @@ export const containerOperations: INodeProperties[] = [
 						ignoreHttpStatusErrors: true,
 						method: 'POST',
 						url: '/colls',
+						headers: {
+							headers: {},
+						},
 					},
 				},
 				action: 'Create container',

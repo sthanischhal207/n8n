@@ -3,6 +3,7 @@ import type {
 	DeclarativeRestApiSettings,
 	IDataObject,
 	IExecutePaginationFunctions,
+	IExecuteSingleFunctions,
 	IHttpRequestOptions,
 	ILoadOptionsFunctions,
 	INodeExecutionData,
@@ -43,7 +44,7 @@ export const HeaderConstants = {
 export function getAuthorizationTokenUsingMasterKey(
 	verb: string,
 	resourceType: string,
-	resourceLink: string,
+	resourceId: string,
 	date: string,
 	masterKey: string,
 ): string {
@@ -51,14 +52,24 @@ export function getAuthorizationTokenUsingMasterKey(
 	const payload =
 		`${verb.toLowerCase()}\n` +
 		`${resourceType.toLowerCase()}\n` +
-		`${resourceLink}\n` +
-		`${date}\n` +
+		`${resourceId}\n` +
+		`${date.toLowerCase()}\n` +
 		'\n';
 
 	const hmacSha256 = crypto.createHmac('sha256', key);
-	const hashPayload = hmacSha256.update(payload, 'utf8').digest('base64');
+	const signature = hmacSha256.update(payload, 'utf8').digest('base64');
 
-	return encodeURIComponent('type=master&ver=1.0&sig=' + hashPayload);
+	return `type=master&ver=1.0&sig=${signature}`;
+}
+
+export async function presendStringifyBody(
+	this: IExecuteSingleFunctions,
+	requestOptions: IHttpRequestOptions,
+): Promise<IHttpRequestOptions> {
+	if (requestOptions.body) {
+		requestOptions.body = JSON.stringify(requestOptions.body);
+	}
+	return requestOptions;
 }
 
 export async function handlePagination(
@@ -207,10 +218,12 @@ export async function searchCollections(
 	}
 
 	const results: INodeListSearchItems[] = collections
-		.map((collection) => ({
-			name: String(collection.id),
-			value: String(collection.id),
-		}))
+		.map((collection) => {
+			return {
+				name: String(collection.id),
+				value: String(collection.id),
+			};
+		})
 		.filter((collection) => !filter || collection.name.includes(filter))
 		.sort((a, b) => a.name.localeCompare(b.name));
 

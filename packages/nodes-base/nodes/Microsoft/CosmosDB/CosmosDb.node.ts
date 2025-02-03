@@ -3,9 +3,9 @@ import { NodeConnectionType } from 'n8n-workflow';
 
 import { containerFields, containerOperations } from './descriptions/ContainerDescription';
 import { itemFields, itemOperations } from './descriptions/ItemDescription';
-import { searchCollections } from './GenericFunctions';
+import { presendStringifyBody, searchCollections } from './GenericFunctions';
 
-export class AzureCosmosDb implements INodeType {
+export class CosmosDb implements INodeType {
 	description: INodeTypeDescription = {
 		displayName: 'Cosmos DB',
 		name: 'cosmosDb',
@@ -58,6 +58,11 @@ export class AzureCosmosDb implements INodeType {
 				name: 'resource',
 				type: 'options',
 				noDataExpression: true,
+				routing: {
+					send: {
+						preSend: [presendStringifyBody],
+					},
+				},
 				options: [
 					{
 						name: 'Container',
