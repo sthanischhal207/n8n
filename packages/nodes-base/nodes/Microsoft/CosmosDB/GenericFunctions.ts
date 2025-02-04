@@ -6,6 +6,7 @@ import type {
 	IExecuteSingleFunctions,
 	IHttpRequestOptions,
 	ILoadOptionsFunctions,
+	IN8nHttpFullResponse,
 	INodeExecutionData,
 	INodeListSearchItems,
 	INodeListSearchResult,
@@ -344,6 +345,7 @@ export async function formatCustomProperties(
 	requestOptions: IHttpRequestOptions,
 ): Promise<IHttpRequestOptions> {
 	const rawCustomProperties = this.getNodeParameter('customProperties', '{}') as string;
+	const newId = this.getNodeParameter('newId') as string;
 
 	let parsedProperties: Record<string, unknown>;
 	try {
@@ -371,7 +373,7 @@ export async function formatCustomProperties(
 		requestOptions.body = {};
 	}
 
-	Object.assign(requestOptions.body as Record<string, unknown>, parsedProperties);
+	Object.assign(requestOptions.body as Record<string, unknown>, { id: newId }, parsedProperties);
 
 	return requestOptions;
 }
@@ -418,6 +420,32 @@ export async function formatJSONFields(
 	return requestOptions;
 }
 
+export async function processResponse(
+	this: IExecuteSingleFunctions,
+	items: INodeExecutionData[],
+	response: IN8nHttpFullResponse,
+): Promise<any> {
+	if (!response || typeof response !== 'object' || !Array.isArray(items)) {
+		throw new ApplicationError('Invalid response format from Cosmos DB.');
+	}
+
+	const extractedDocuments: IDataObject[] = items.flatMap((item) => {
+		if (
+			item.json &&
+			typeof item.json === 'object' &&
+			'Documents' in item.json &&
+			Array.isArray(item.json.Documents)
+		) {
+			return item.json.Documents as IDataObject[];
+		}
+
+		return [];
+	});
+
+	return extractedDocuments;
+}
+
+//WIP
 export async function mapOperationsToRequest(
 	this: IExecuteSingleFunctions,
 	requestOptions: IHttpRequestOptions,
@@ -458,7 +486,6 @@ export async function mapOperationsToRequest(
 		return formattedOperation;
 	});
 
-	// Assign the formatted operations to the request body
 	requestOptions.body = { operations: formattedOperations };
 
 	return requestOptions;

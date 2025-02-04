@@ -3,6 +3,7 @@ import type { INodeProperties } from 'n8n-workflow';
 import {
 	formatCustomProperties,
 	handlePagination,
+	processResponse,
 	validateOperations,
 	validateQueryParameters,
 } from '../GenericFunctions';
@@ -32,8 +33,7 @@ export const itemOperations: INodeProperties[] = [
 						method: 'POST',
 						url: '=/colls/{{ $parameter["collId"] }}/docs',
 						headers: {
-							// 'x-ms-partitionkey': '=["{{$parameter["newId"]}}"]',
-							// 'x-ms-documentdb-partitionkey': '=["{{$parameter["newId"]}}"]',
+							'x-ms-documentdb-partitionkey': '=["{{$parameter["newId"]}}"]',
 							'x-ms-documentdb-is-upsert': 'True',
 						},
 					},
@@ -83,14 +83,7 @@ export const itemOperations: INodeProperties[] = [
 						url: '=/colls/{{ $parameter["collId"] }}/docs',
 					},
 					output: {
-						postReceive: [
-							{
-								type: 'rootProperty',
-								properties: {
-									property: 'json',
-								},
-							},
-						],
+						postReceive: [processResponse],
 					},
 				},
 				action: 'Get many items',
@@ -186,28 +179,28 @@ export const createFields: INodeProperties[] = [
 			},
 		],
 	},
-	// {
-	// 	displayName: 'ID',
-	// 	name: 'newId',
-	// 	type: 'string',
-	// 	default: '',
-	// 	placeholder: 'e.g. AndersenFamily',
-	// 	description: "Item's ID",
-	// 	required: true,
-	// 	displayOptions: {
-	// 		show: {
-	// 			resource: ['item'],
-	// 			operation: ['create'],
-	// 		},
-	// 	},
-	// 	routing: {
-	// 		send: {
-	// 			type: 'body',
-	// 			property: 'id',
-	// 			value: '={{$value}}',
-	// 		},
-	// 	},
-	// },
+	{
+		displayName: 'ID',
+		name: 'newId',
+		type: 'string',
+		default: '',
+		placeholder: 'e.g. AndersenFamily',
+		description: "Item's ID",
+		required: true,
+		displayOptions: {
+			show: {
+				resource: ['item'],
+				operation: ['create'],
+			},
+		},
+		routing: {
+			send: {
+				type: 'body',
+				property: 'id',
+				value: '={{$value}}',
+			},
+		},
+	},
 	{
 		displayName: 'Custom Properties',
 		name: 'customProperties',
