@@ -3,7 +3,7 @@ import { NodeConnectionType } from 'n8n-workflow';
 
 import { containerFields, containerOperations } from './descriptions/ContainerDescription';
 import { itemFields, itemOperations } from './descriptions/ItemDescription';
-import { presendStringifyBody, searchCollections } from './GenericFunctions';
+import { searchCollections, searchItems } from './GenericFunctions';
 
 export class CosmosDb implements INodeType {
 	description: INodeTypeDescription = {
@@ -59,9 +59,9 @@ export class CosmosDb implements INodeType {
 				type: 'options',
 				noDataExpression: true,
 				routing: {
-					send: {
-						preSend: [presendStringifyBody],
-					},
+					// send: {
+					// 	preSend: [presendStringifyBody],
+					// },
 				},
 				options: [
 					{
@@ -85,6 +85,7 @@ export class CosmosDb implements INodeType {
 	methods = {
 		listSearch: {
 			searchCollections,
+			searchItems,
 		},
 	};
 }

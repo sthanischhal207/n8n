@@ -1,5 +1,7 @@
 import type { INodeProperties } from 'n8n-workflow';
 
+import { formatJSONFields } from '../GenericFunctions';
+
 export const containerOperations: INodeProperties[] = [
 	{
 		displayName: 'Operation',
@@ -17,13 +19,13 @@ export const containerOperations: INodeProperties[] = [
 				value: 'create',
 				description: 'Create a container',
 				routing: {
+					send: {
+						preSend: [formatJSONFields],
+					},
 					request: {
 						ignoreHttpStatusErrors: true,
 						method: 'POST',
 						url: '/colls',
-						headers: {
-							headers: {},
-						},
 					},
 				},
 				action: 'Create container',
@@ -75,7 +77,7 @@ export const containerOperations: INodeProperties[] = [
 export const createFields: INodeProperties[] = [
 	{
 		displayName: 'ID',
-		name: 'id',
+		name: 'newid',
 		type: 'string',
 		default: '',
 		placeholder: 'e.g. AndersenFamily',
@@ -109,13 +111,6 @@ export const createFields: INodeProperties[] = [
 				operation: ['create'],
 			},
 		},
-		routing: {
-			send: {
-				type: 'body',
-				property: 'partitionKey',
-				value: '={{$value}}',
-			},
-		},
 	},
 	{
 		displayName: 'Additional Fields',
@@ -136,13 +131,6 @@ export const createFields: INodeProperties[] = [
 				placeholder:
 					'"automatic": true, "indexingMode": "Consistent", "includedPaths": [{ "path": "/*", "indexes": [{ "dataType": "String", "precision": -1, "kind": "Range" }]}]',
 				description: 'This value is used to configure indexing policy',
-				routing: {
-					send: {
-						type: 'body',
-						property: 'indexingPolicy',
-						value: '={{$value}}',
-					},
-				},
 			},
 			{
 				displayName: 'Max RU/s (for Autoscale)',
@@ -191,7 +179,7 @@ export const createFields: INodeProperties[] = [
 
 export const getFields: INodeProperties[] = [
 	{
-		displayName: 'Container ID',
+		displayName: 'Container',
 		name: 'collId',
 		type: 'resourceLocator',
 		required: true,
@@ -240,7 +228,7 @@ export const getAllFields: INodeProperties[] = [];
 
 export const deleteFields: INodeProperties[] = [
 	{
-		displayName: 'Container ID',
+		displayName: 'Container',
 		name: 'collId',
 		type: 'resourceLocator',
 		required: true,

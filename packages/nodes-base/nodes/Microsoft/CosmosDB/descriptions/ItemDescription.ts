@@ -1,6 +1,11 @@
-import type { IExecuteSingleFunctions, IHttpRequestOptions, INodeProperties } from 'n8n-workflow';
+import type { INodeProperties } from 'n8n-workflow';
 
-import { handlePagination } from '../GenericFunctions';
+import {
+	formatCustomProperties,
+	handlePagination,
+	validateOperations,
+	validateQueryParameters,
+} from '../GenericFunctions';
 
 export const itemOperations: INodeProperties[] = [
 	{
@@ -19,12 +24,17 @@ export const itemOperations: INodeProperties[] = [
 				value: 'create',
 				description: 'Create a new item',
 				routing: {
+					send: {
+						preSend: [formatCustomProperties],
+					},
 					request: {
 						ignoreHttpStatusErrors: true,
 						method: 'POST',
 						url: '=/colls/{{ $parameter["collId"] }}/docs',
 						headers: {
-							// 'x-ms-documentdb-partitionkey': '={{$parameter["partitionKey"]}}',
+							// 'x-ms-partitionkey': '=["{{$parameter["newId"]}}"]',
+							// 'x-ms-documentdb-partitionkey': '=["{{$parameter["newId"]}}"]',
+							'x-ms-documentdb-is-upsert': 'True',
 						},
 					},
 				},
@@ -48,16 +58,6 @@ export const itemOperations: INodeProperties[] = [
 				value: 'get',
 				description: 'Retrieve an item',
 				routing: {
-					send: {
-						preSend: [
-							async function (
-								this: IExecuteSingleFunctions,
-								requestOptions: IHttpRequestOptions,
-							): Promise<IHttpRequestOptions> {
-								return requestOptions;
-							},
-						],
-					},
 					request: {
 						ignoreHttpStatusErrors: true,
 						method: 'GET',
@@ -82,6 +82,16 @@ export const itemOperations: INodeProperties[] = [
 						method: 'GET',
 						url: '=/colls/{{ $parameter["collId"] }}/docs',
 					},
+					output: {
+						postReceive: [
+							{
+								type: 'rootProperty',
+								properties: {
+									property: 'json',
+								},
+							},
+						],
+					},
 				},
 				action: 'Get many items',
 			},
@@ -90,6 +100,9 @@ export const itemOperations: INodeProperties[] = [
 				value: 'query',
 				description: 'Query items',
 				routing: {
+					send: {
+						preSend: [validateQueryParameters],
+					},
 					request: {
 						ignoreHttpStatusErrors: true,
 						method: 'POST',
@@ -107,12 +120,17 @@ export const itemOperations: INodeProperties[] = [
 				value: 'update',
 				description: 'Update an existing item',
 				routing: {
+					send: {
+						preSend: [validateOperations],
+					},
 					request: {
 						ignoreHttpStatusErrors: true,
 						method: 'PATCH',
 						url: '=/colls/{{ $parameter["collId"] }}/docs/{{ $parameter["id"] }}',
 						headers: {
 							'Content-Type': 'application/json-patch+json',
+							'x-ms-partitionkey': '=["{{$parameter["id"]}}"]',
+							'x-ms-documentdb-partitionkey': '=["{{$parameter["id"]}}"]',
 						},
 					},
 				},
@@ -170,7 +188,7 @@ export const createFields: INodeProperties[] = [
 	},
 	// {
 	// 	displayName: 'ID',
-	// 	name: 'id',
+	// 	name: 'newId',
 	// 	type: 'string',
 	// 	default: '',
 	// 	placeholder: 'e.g. AndersenFamily',
@@ -260,19 +278,48 @@ export const deleteFields: INodeProperties[] = [
 		],
 	},
 	{
-		displayName: 'ID',
+		displayName: 'Item',
 		name: 'id',
-		type: 'string',
-		default: '',
-		placeholder: 'e.g. AndersenFamily',
-		description: 'Unique ID for the item',
+		type: 'resourceLocator',
 		required: true,
+		default: {
+			mode: 'list',
+			value: '',
+		},
+		description: "Select the item's ID",
 		displayOptions: {
 			show: {
 				resource: ['item'],
 				operation: ['delete'],
 			},
 		},
+		modes: [
+			{
+				displayName: 'From list',
+				name: 'list',
+				type: 'list',
+				typeOptions: {
+					searchListMethod: 'searchItems',
+					searchable: true,
+				},
+			},
+			{
+				displayName: 'By Name',
+				name: 'itemName',
+				type: 'string',
+				hint: 'Enter the item name',
+				validation: [
+					{
+						type: 'regex',
+						properties: {
+							regex: '^[\\w+=,.@-]+$',
+							errorMessage: 'The item name must follow the allowed pattern.',
+						},
+					},
+				],
+				placeholder: 'e.g. AndersenFamily',
+			},
+		],
 	},
 ];
 
@@ -322,19 +369,48 @@ export const getFields: INodeProperties[] = [
 		],
 	},
 	{
-		displayName: 'ID',
+		displayName: 'Item',
 		name: 'id',
-		type: 'string',
-		default: '',
-		placeholder: 'e.g. AndersenFamily',
-		description: "Item's ID",
+		type: 'resourceLocator',
 		required: true,
+		default: {
+			mode: 'list',
+			value: '',
+		},
+		description: "Select the item's ID",
 		displayOptions: {
 			show: {
 				resource: ['item'],
 				operation: ['get'],
 			},
 		},
+		modes: [
+			{
+				displayName: 'From list',
+				name: 'list',
+				type: 'list',
+				typeOptions: {
+					searchListMethod: 'searchItems',
+					searchable: true,
+				},
+			},
+			{
+				displayName: 'By Name',
+				name: 'itemName',
+				type: 'string',
+				hint: 'Enter the item name',
+				validation: [
+					{
+						type: 'regex',
+						properties: {
+							regex: '^[\\w+=,.@-]+$',
+							errorMessage: 'The item name must follow the allowed pattern.',
+						},
+					},
+				],
+				placeholder: 'e.g. AndersenFamily',
+			},
+		],
 	},
 ];
 
@@ -474,7 +550,6 @@ export const queryFields: INodeProperties[] = [
 		type: 'string',
 		default: '',
 		required: true,
-		description: 'The SQL query text to execute',
 		displayOptions: {
 			show: {
 				resource: ['item'],
@@ -532,7 +607,8 @@ export const queryFields: INodeProperties[] = [
 			send: {
 				type: 'body',
 				property: 'parameters',
-				value: '={{$value}}',
+				value:
+					'={{$parameter["parameters"] && $parameter["parameters"].parameters ? $parameter["parameters"].parameters : []}}',
 			},
 		},
 	},
@@ -584,56 +660,110 @@ export const updateFields: INodeProperties[] = [
 		],
 	},
 	{
-		displayName: 'ID',
+		displayName: 'Item',
 		name: 'id',
-		type: 'string',
-		default: '',
-		placeholder: 'e.g. AndersenFamily',
-		description: 'Unique ID for the document',
+		type: 'resourceLocator',
 		required: true,
+		default: {
+			mode: 'list',
+			value: '',
+		},
+		description: "Select the item's ID",
 		displayOptions: {
 			show: {
 				resource: ['item'],
 				operation: ['update'],
 			},
 		},
+		modes: [
+			{
+				displayName: 'From list',
+				name: 'list',
+				type: 'list',
+				typeOptions: {
+					searchListMethod: 'searchItems',
+					searchable: true,
+				},
+			},
+			{
+				displayName: 'By Name',
+				name: 'itemName',
+				type: 'string',
+				hint: 'Enter the item name',
+				validation: [
+					{
+						type: 'regex',
+						properties: {
+							regex: '^[\\w+=,.@-]+$',
+							errorMessage: 'The item name must follow the allowed pattern.',
+						},
+					},
+				],
+				placeholder: 'e.g. AndersenFamily',
+			},
+		],
 	},
-	//TO-DO-check-this
 	{
 		displayName: 'Operations',
 		name: 'operations',
-		type: 'resourceMapper',
-		default: {
-			mappingMode: 'defineBelow',
-			value: null,
-		},
+		type: 'fixedCollection',
+		placeholder: 'Add Operation',
+		description: 'Patch operations to apply to the document',
 		required: true,
+		default: [],
 		typeOptions: {
-			resourceMapper: {
-				resourceMapperMethod: 'getMappingColumns',
-				mode: 'update',
-				fieldWords: {
-					singular: 'operation',
-					plural: 'operations',
-				},
-				addAllFields: true,
-				multiKeyMatch: false,
-				supportAutoMap: true,
-				matchingFieldsLabels: {
-					title: 'Custom Matching Operations',
-					description: 'Define the operations to perform, such as "set", "delete", or "add".',
-					hint: 'Map input data to the expected structure of the operations array.',
-				},
-			},
+			multipleValues: true,
 		},
-		description: 'Define the operations to perform, such as setting or updating document fields',
 		displayOptions: {
 			show: {
 				resource: ['item'],
 				operation: ['update'],
 			},
 		},
-		//TO-DO-presend-function
+		options: [
+			{
+				name: 'operations',
+				displayName: 'Operation',
+				values: [
+					{
+						displayName: 'Operation',
+						name: 'op',
+						type: 'options',
+						options: [
+							{ name: 'Add', value: 'add' },
+							{ name: 'Increment', value: 'increment' },
+							{ name: 'Move', value: 'move' },
+							{ name: 'Remove', value: 'remove' },
+							{ name: 'Replace', value: 'replace' },
+							{ name: 'Set', value: 'set' },
+						],
+						default: 'set',
+					},
+					{
+						displayName: 'Path',
+						name: 'path',
+						type: 'string',
+						default: '',
+						placeholder: '/Parents/0/FamilyName',
+						description: 'The path to the document field to be updated',
+					},
+					{
+						displayName: 'Value',
+						name: 'value',
+						type: 'string',
+						default: '',
+						description: 'The value to set (if applicable)',
+					},
+				],
+			},
+		],
+		routing: {
+			send: {
+				type: 'body',
+				property: 'operations',
+				value: '={{ $parameter["operations"].operations }}',
+			},
+		},
 	},
 ];
 

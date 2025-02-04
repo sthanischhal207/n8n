@@ -231,3 +231,235 @@ export async function searchCollections(
 		results,
 	};
 }
+
+export async function searchItems(
+	this: ILoadOptionsFunctions,
+	filter?: string,
+): Promise<INodeListSearchResult> {
+	const collection = this.getNodeParameter('collId') as { mode: string; value: string };
+
+	if (!collection?.value) {
+		throw new ApplicationError('Collection ID is required.');
+	}
+	const opts: IHttpRequestOptions = {
+		method: 'GET',
+		url: `/colls/${collection.value}/docs`,
+	};
+
+	const responseData: IDataObject = await microsoftCosmosDbRequest.call(this, opts);
+
+	const responseBody = responseData as {
+		Documents: IDataObject[];
+	};
+	const items = responseBody.Documents;
+
+	if (!items) {
+		return { results: [] };
+	}
+
+	const results: INodeListSearchItems[] = items
+		.map((item) => {
+			return {
+				name: String(item.id),
+				value: String(item.id),
+			};
+		})
+		.filter((item) => !filter || item.name.includes(filter))
+		.sort((a, b) => a.name.localeCompare(b.name));
+
+	return {
+		results,
+	};
+}
+
+export async function validateQueryParameters(
+	this: IExecuteSingleFunctions,
+	requestOptions: IHttpRequestOptions,
+): Promise<IHttpRequestOptions> {
+	const params = this.getNodeParameter('parameters', {}) as {
+		parameters: Array<{ name: string; value: string }>;
+	};
+
+	if (!params || !Array.isArray(params.parameters)) {
+		throw new ApplicationError(
+			'The "parameters" field cannot be empty. Please add at least one parameter.',
+		);
+	}
+
+	const parameters = params.parameters;
+
+	for (const parameter of parameters) {
+		if (!parameter.name || parameter.name.trim() === '') {
+			throw new ApplicationError('Each parameter must have a non-empty "name".');
+		}
+
+		if (!parameter.value) {
+			throw new ApplicationError(`The parameter "${parameter.name}" must have a valid "value".`);
+		}
+	}
+
+	return requestOptions;
+}
+
+export async function validateOperations(
+	this: IExecuteSingleFunctions,
+	requestOptions: IHttpRequestOptions,
+): Promise<IHttpRequestOptions> {
+	const rawOperations = this.getNodeParameter('operations', []) as IDataObject;
+	console.log('Operations', rawOperations);
+	if (!rawOperations || !Array.isArray(rawOperations.operations)) {
+		throw new ApplicationError('The "operations" field must contain at least one operation.');
+	}
+
+	const operations = rawOperations.operations as Array<{
+		op: string;
+		path: string;
+		value?: string;
+	}>;
+
+	for (const operation of operations) {
+		if (!['add', 'increment', 'move', 'remove', 'replace', 'set'].includes(operation.op)) {
+			throw new ApplicationError(
+				`Invalid operation type "${operation.op}". Allowed values are "add", "increment", "move", "remove", "replace", and "set".`,
+			);
+		}
+
+		if (!operation.path || operation.path.trim() === '') {
+			throw new ApplicationError('Each operation must have a valid "path".');
+		}
+
+		if (
+			['set', 'replace', 'add', 'increment'].includes(operation.op) &&
+			(operation.value === undefined || operation.value === null)
+		) {
+			throw new ApplicationError(`The operation "${operation.op}" must include a valid "value".`);
+		}
+	}
+
+	return requestOptions;
+}
+
+export async function formatCustomProperties(
+	this: IExecuteSingleFunctions,
+	requestOptions: IHttpRequestOptions,
+): Promise<IHttpRequestOptions> {
+	const rawCustomProperties = this.getNodeParameter('customProperties', '{}') as string;
+
+	let parsedProperties: Record<string, unknown>;
+	try {
+		// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+		parsedProperties = JSON.parse(rawCustomProperties);
+	} catch (error) {
+		throw new ApplicationError(
+			'Invalid JSON format in "Custom Properties". Please provide a valid JSON object.',
+		);
+	}
+
+	if (
+		typeof parsedProperties !== 'object' ||
+		parsedProperties === null ||
+		Array.isArray(parsedProperties)
+	) {
+		throw new ApplicationError('The "Custom Properties" field must be a valid JSON object.');
+	}
+
+	if (
+		!requestOptions.body ||
+		typeof requestOptions.body !== 'object' ||
+		requestOptions.body === null
+	) {
+		requestOptions.body = {};
+	}
+
+	Object.assign(requestOptions.body as Record<string, unknown>, parsedProperties);
+
+	return requestOptions;
+}
+
+export async function formatJSONFields(
+	this: IExecuteSingleFunctions,
+	requestOptions: IHttpRequestOptions,
+): Promise<IHttpRequestOptions> {
+	const rawPartitionKey = this.getNodeParameter('partitionKey', '{}') as string;
+	const additionalFields = this.getNodeParameter('additionalFields', {}) as IDataObject;
+	const indexingPolicy = additionalFields.indexingPolicy as string;
+
+	let parsedPartitionKey: Record<string, unknown>;
+	let parsedIndexPolicy: Record<string, unknown> | undefined;
+
+	try {
+		// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+		parsedPartitionKey = JSON.parse(rawPartitionKey);
+
+		if (indexingPolicy) {
+			// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+			parsedIndexPolicy = JSON.parse(indexingPolicy);
+		}
+	} catch (error) {
+		throw new ApplicationError(
+			'Invalid JSON format in either "Partition Key" or "Indexing Policy". Please provide valid JSON objects.',
+		);
+	}
+
+	if (
+		!requestOptions.body ||
+		typeof requestOptions.body !== 'object' ||
+		requestOptions.body === null
+	) {
+		requestOptions.body = {};
+	}
+
+	(requestOptions.body as Record<string, unknown>).partitionKey = parsedPartitionKey;
+
+	if (parsedIndexPolicy) {
+		(requestOptions.body as Record<string, unknown>).indexingPolicy = parsedIndexPolicy;
+	}
+
+	return requestOptions;
+}
+
+export async function mapOperationsToRequest(
+	this: IExecuteSingleFunctions,
+	requestOptions: IHttpRequestOptions,
+): Promise<IHttpRequestOptions> {
+	const rawOperations = this.getNodeParameter('operations', []) as {
+		operations: Array<{
+			op: string;
+			path: string;
+			from?: string;
+			value?: string | number;
+		}>;
+	};
+
+	if (!rawOperations || !Array.isArray(rawOperations.operations)) {
+		throw new ApplicationError('Invalid operations format. Expected an array.');
+	}
+
+	// Map and validate operations
+	const formattedOperations = rawOperations.operations.map((operation) => {
+		const { op, path, from, value } = operation;
+
+		// Validate required fields
+		if (!op || !path) {
+			throw new ApplicationError('Each operation must include "op" and "path".');
+		}
+
+		// Construct operation object
+		const formattedOperation: Record<string, unknown> = { op, path };
+
+		// Add optional fields if they exist
+		if (from && op === 'move') {
+			formattedOperation.from = from;
+		}
+		if (value !== undefined && op !== 'remove') {
+			formattedOperation.value = value;
+		}
+
+		return formattedOperation;
+	});
+
+	// Assign the formatted operations to the request body
+	requestOptions.body = { operations: formattedOperations };
+
+	return requestOptions;
+}

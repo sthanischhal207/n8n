@@ -71,7 +71,6 @@ export class MicrosoftCosmosDbSharedKeyApi implements ICredentialType {
 			...requestOptions.headers,
 			'x-ms-date': date,
 			'x-ms-version': '2018-12-31',
-			'x-ms-partitionkey': '[]',
 		};
 
 		if (credentials.sessionToken) {
@@ -80,6 +79,7 @@ export class MicrosoftCosmosDbSharedKeyApi implements ICredentialType {
 
 		// This shouldn't be the full url
 		// Refer to https://stackoverflow.com/questions/45645389/documentdb-rest-api-authorization-token-error
+		// const url = new URL (requestOptions.uri);
 
 		const url = new URL(requestOptions.baseURL + requestOptions.url);
 		const pathSegments = url.pathname.split('/').filter((segment) => segment);
