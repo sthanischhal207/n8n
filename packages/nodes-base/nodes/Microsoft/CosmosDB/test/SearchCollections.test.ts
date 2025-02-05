@@ -18,7 +18,11 @@ describe('GenericFunctions - searchCollections', () => {
 	});
 
 	it('should make a GET request to fetch collections and return results', async () => {
-		(mockContext.getCredentials as jest.Mock).mockResolvedValueOnce({ account: 'us-east-1' });
+		(mockContext.getCredentials as jest.Mock).mockResolvedValueOnce({
+			account: 'us-east-1',
+			database: 'first_database_1',
+			baseUrl: 'https://us-east-1.documents.azure.com',
+		});
 
 		mockRequestWithAuthentication.mockResolvedValueOnce({
 			DocumentCollections: [{ id: 'Collection1' }, { id: 'Collection2' }],
@@ -27,7 +31,7 @@ describe('GenericFunctions - searchCollections', () => {
 		const response = await searchCollections.call(mockContext);
 
 		expect(mockRequestWithAuthentication).toHaveBeenCalledWith(
-			'azureCosmosDbSharedKeyApi',
+			'microsoftCosmosDbSharedKeyApi',
 			expect.objectContaining({
 				baseURL: 'https://us-east-1.documents.azure.com',
 				method: 'GET',
@@ -49,7 +53,11 @@ describe('GenericFunctions - searchCollections', () => {
 	});
 
 	it('should filter collections by the provided filter string', async () => {
-		(mockContext.getCredentials as jest.Mock).mockResolvedValueOnce({ account: 'us-east-1' });
+		(mockContext.getCredentials as jest.Mock).mockResolvedValueOnce({
+			account: 'us-east-1',
+			database: 'first_database_1',
+			baseUrl: 'https://us-east-1.documents.azure.com',
+		});
 
 		mockRequestWithAuthentication.mockResolvedValueOnce({
 			DocumentCollections: [{ id: 'Test-Col-1' }, { id: 'Prod-Col-1' }],
@@ -58,7 +66,7 @@ describe('GenericFunctions - searchCollections', () => {
 		const response = await searchCollections.call(mockContext, 'Test');
 
 		expect(mockRequestWithAuthentication).toHaveBeenCalledWith(
-			'azureCosmosDbSharedKeyApi',
+			'microsoftCosmosDbSharedKeyApi',
 			expect.objectContaining({
 				baseURL: 'https://us-east-1.documents.azure.com',
 				method: 'GET',

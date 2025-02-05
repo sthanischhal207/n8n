@@ -16,12 +16,11 @@ describe('GenericFunctions - microsoftCosmosDbRequest', () => {
 
 	test('should make a successful request with correct options', async () => {
 		mockRequestWithAuthentication.mockResolvedValueOnce({ success: true });
-		(mockContext.getCredentials as jest.Mock).mockResolvedValueOnce({ account: 'us-east-1' });
+
 		(mockContext.getCredentials as jest.Mock).mockResolvedValueOnce({
+			account: 'us-east-1',
 			database: 'first_database_1',
-		});
-		(mockContext.getCredentials as jest.Mock).mockResolvedValueOnce({
-			baseUrl: 'https://us-east-1.documents.azure.com/dbs',
+			baseUrl: 'https://us-east-1.documents.azure.com/dbs/first_database_1',
 		});
 
 		const requestOptions = {
