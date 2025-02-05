@@ -1,6 +1,6 @@
 import type { INodeProperties } from 'n8n-workflow';
 
-import { formatJSONFields } from '../GenericFunctions';
+import { formatJSONFields, processResponseContainers, validateFields } from '../GenericFunctions';
 
 export const containerOperations: INodeProperties[] = [
 	{
@@ -20,7 +20,7 @@ export const containerOperations: INodeProperties[] = [
 				description: 'Create a container',
 				routing: {
 					send: {
-						preSend: [formatJSONFields],
+						preSend: [formatJSONFields, validateFields],
 					},
 					request: {
 						ignoreHttpStatusErrors: true,
@@ -39,6 +39,16 @@ export const containerOperations: INodeProperties[] = [
 						ignoreHttpStatusErrors: true,
 						method: 'DELETE',
 						url: '=/colls/{{ $parameter["collId"] }}',
+					},
+					output: {
+						postReceive: [
+							{
+								type: 'set',
+								properties: {
+									value: '={{ { "success": true } }}',
+								},
+							},
+						],
 					},
 				},
 				action: 'Delete container',
@@ -65,6 +75,9 @@ export const containerOperations: INodeProperties[] = [
 						ignoreHttpStatusErrors: true,
 						method: 'GET',
 						url: '/colls',
+					},
+					output: {
+						postReceive: [processResponseContainers],
 					},
 				},
 				action: 'Get many containers',
@@ -136,20 +149,11 @@ export const createFields: INodeProperties[] = [
 				displayName: 'Max RU/s (for Autoscale)',
 				name: 'maxThroughput',
 				type: 'number',
+				typeOptions: {
+					minValue: 1000,
+				},
 				default: 1000,
 				description: 'The user specified autoscale max RU/s',
-				displayOptions: {
-					show: {
-						offerThroughput: [undefined],
-					},
-				},
-				routing: {
-					send: {
-						type: 'query',
-						property: 'x-ms-cosmos-offer-autopilot-settings',
-						value: '={{"{"maxThroughput": " + $value + "}"}',
-					},
-				},
 			},
 			{
 				displayName: 'Max RU/s (for Manual Throughput)',
@@ -158,11 +162,6 @@ export const createFields: INodeProperties[] = [
 				default: 400,
 				description:
 					'The user specified manual throughput (RU/s) for the collection expressed in units of 100 request units per second',
-				displayOptions: {
-					show: {
-						maxThroughput: [undefined],
-					},
-				},
 				routing: {
 					send: {
 						type: 'query',

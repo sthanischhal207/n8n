@@ -91,11 +91,21 @@ export class MicrosoftCosmosDbSharedKeyApi implements ICredentialType {
 		if (pathSegments.includes('docs')) {
 			const docsIndex = pathSegments.lastIndexOf('docs');
 			resourceType = 'docs';
-			resourceId = pathSegments.slice(0, docsIndex).join('/');
+			if (pathSegments[docsIndex + 1]) {
+				const docsId = pathSegments[docsIndex + 1];
+				resourceId = pathSegments.slice(0, docsIndex).join('/') + `/docs/${docsId}`;
+			} else {
+				resourceId = pathSegments.slice(0, docsIndex).join('/');
+			}
 		} else if (pathSegments.includes('colls')) {
 			const collsIndex = pathSegments.lastIndexOf('colls');
 			resourceType = 'colls';
-			resourceId = pathSegments.slice(0, collsIndex).join('/');
+			if (pathSegments[collsIndex + 1]) {
+				const collId = pathSegments[collsIndex + 1];
+				resourceId = pathSegments.slice(0, collsIndex).join('/') + `/colls/${collId}`;
+			} else {
+				resourceId = pathSegments.slice(0, collsIndex).join('/');
+			}
 		} else if (pathSegments.includes('dbs')) {
 			const dbsIndex = pathSegments.lastIndexOf('dbs');
 			resourceType = 'dbs';

@@ -3,7 +3,7 @@ import type { INodeProperties } from 'n8n-workflow';
 import {
 	formatCustomProperties,
 	handlePagination,
-	processResponse,
+	processResponseItems,
 	validateOperations,
 	validateQueryParameters,
 } from '../GenericFunctions';
@@ -32,6 +32,7 @@ export const itemOperations: INodeProperties[] = [
 						ignoreHttpStatusErrors: true,
 						method: 'POST',
 						url: '=/colls/{{ $parameter["collId"] }}/docs',
+						//To-Do-do it based on the partition key of collection and only one
 						headers: {
 							'x-ms-documentdb-partitionkey': '=["{{$parameter["newId"]}}"]',
 							'x-ms-documentdb-is-upsert': 'True',
@@ -49,6 +50,20 @@ export const itemOperations: INodeProperties[] = [
 						ignoreHttpStatusErrors: true,
 						method: 'DELETE',
 						url: '=/colls/{{ $parameter["collId"] }}/docs/{{ $parameter["id"] }}',
+						//To-Do-do it based on the partition key of collection and only one
+						headers: {
+							'x-ms-documentdb-partitionkey': '=["{{$parameter["id"]}}"]',
+						},
+					},
+					output: {
+						postReceive: [
+							{
+								type: 'set',
+								properties: {
+									value: '={{ { "success": true } }}',
+								},
+							},
+						],
 					},
 				},
 				action: 'Delete item',
@@ -61,7 +76,12 @@ export const itemOperations: INodeProperties[] = [
 					request: {
 						ignoreHttpStatusErrors: true,
 						method: 'GET',
-						url: '=/colls/{{ $parameter["collId"] }}/docs/{{ $parameter["id"] }}',
+						url: '=/colls/{{ $parameter["collId"]}}/docs/{{$parameter["id"]}}',
+						headers: {
+							//To-Do-do it based on the partition key of collection and only one
+							'x-ms-documentdb-partitionkey': '=["{{$parameter["id"]}}"]',
+							'x-ms-documentdb-is-upsert': 'True',
+						},
 					},
 				},
 				action: 'Get item',
@@ -83,7 +103,7 @@ export const itemOperations: INodeProperties[] = [
 						url: '=/colls/{{ $parameter["collId"] }}/docs',
 					},
 					output: {
-						postReceive: [processResponse],
+						postReceive: [processResponseItems],
 					},
 				},
 				action: 'Get many items',
@@ -136,7 +156,7 @@ export const itemOperations: INodeProperties[] = [
 
 export const createFields: INodeProperties[] = [
 	{
-		displayName: 'Collection ID',
+		displayName: 'Container ID',
 		name: 'collId',
 		type: 'resourceLocator',
 		required: true,
@@ -144,7 +164,7 @@ export const createFields: INodeProperties[] = [
 			mode: 'list',
 			value: '',
 		},
-		description: 'Select the collection you want to use',
+		description: 'Select the container you want to use',
 		displayOptions: {
 			show: {
 				resource: ['item'],
@@ -162,20 +182,20 @@ export const createFields: INodeProperties[] = [
 				},
 			},
 			{
-				displayName: 'By Name',
-				name: 'collectionName',
+				displayName: 'By ID',
+				name: 'containerId',
 				type: 'string',
-				hint: 'Enter the collection name',
+				hint: 'Enter the container ID',
 				validation: [
 					{
 						type: 'regex',
 						properties: {
 							regex: '^[\\w+=,.@-]+$',
-							errorMessage: 'The collection name must follow the allowed pattern.',
+							errorMessage: 'The container id must follow the allowed pattern.',
 						},
 					},
 				],
-				placeholder: 'e.g. UsersCollection',
+				placeholder: 'e.g. UsersContainer',
 			},
 		],
 	},
@@ -215,19 +235,12 @@ export const createFields: INodeProperties[] = [
 				operation: ['create'],
 			},
 		},
-		//To-Do-add preSend function
-		routing: {
-			send: {
-				type: 'body',
-				value: '={{$value}}',
-			},
-		},
 	},
 ];
 
 export const deleteFields: INodeProperties[] = [
 	{
-		displayName: 'Collection ID',
+		displayName: 'Container ID',
 		name: 'collId',
 		type: 'resourceLocator',
 		required: true,
@@ -235,7 +248,7 @@ export const deleteFields: INodeProperties[] = [
 			mode: 'list',
 			value: '',
 		},
-		description: 'Select the collection you want to use',
+		description: 'Select the container you want to use',
 		displayOptions: {
 			show: {
 				resource: ['item'],
@@ -253,20 +266,20 @@ export const deleteFields: INodeProperties[] = [
 				},
 			},
 			{
-				displayName: 'By Name',
-				name: 'collectionName',
+				displayName: 'By ID',
+				name: 'containerId',
 				type: 'string',
-				hint: 'Enter the collection name',
+				hint: 'Enter the container id',
 				validation: [
 					{
 						type: 'regex',
 						properties: {
 							regex: '^[\\w+=,.@-]+$',
-							errorMessage: 'The collection name must follow the allowed pattern.',
+							errorMessage: 'The container name must follow the allowed pattern.',
 						},
 					},
 				],
-				placeholder: 'e.g. UsersCollection',
+				placeholder: 'e.g. UsersContainer',
 			},
 		],
 	},
@@ -297,16 +310,16 @@ export const deleteFields: INodeProperties[] = [
 				},
 			},
 			{
-				displayName: 'By Name',
-				name: 'itemName',
+				displayName: 'By ID',
+				name: 'itemId',
 				type: 'string',
-				hint: 'Enter the item name',
+				hint: 'Enter the item id',
 				validation: [
 					{
 						type: 'regex',
 						properties: {
 							regex: '^[\\w+=,.@-]+$',
-							errorMessage: 'The item name must follow the allowed pattern.',
+							errorMessage: 'The item id must follow the allowed pattern.',
 						},
 					},
 				],
@@ -318,7 +331,7 @@ export const deleteFields: INodeProperties[] = [
 
 export const getFields: INodeProperties[] = [
 	{
-		displayName: 'Collection ID',
+		displayName: 'Container ID',
 		name: 'collId',
 		type: 'resourceLocator',
 		required: true,
@@ -326,7 +339,7 @@ export const getFields: INodeProperties[] = [
 			mode: 'list',
 			value: '',
 		},
-		description: 'Select the collection you want to use',
+		description: 'Select the container you want to use',
 		displayOptions: {
 			show: {
 				resource: ['item'],
@@ -344,20 +357,20 @@ export const getFields: INodeProperties[] = [
 				},
 			},
 			{
-				displayName: 'By Name',
-				name: 'collectionName',
+				displayName: 'By ID',
+				name: 'containerId',
 				type: 'string',
-				hint: 'Enter the collection name',
+				hint: 'Enter the container id',
 				validation: [
 					{
 						type: 'regex',
 						properties: {
 							regex: '^[\\w+=,.@-]+$',
-							errorMessage: 'The collection name must follow the allowed pattern.',
+							errorMessage: 'The container name must follow the allowed pattern.',
 						},
 					},
 				],
-				placeholder: 'e.g. UsersCollection',
+				placeholder: 'e.g. UsersContainer',
 			},
 		],
 	},
@@ -388,16 +401,16 @@ export const getFields: INodeProperties[] = [
 				},
 			},
 			{
-				displayName: 'By Name',
-				name: 'itemName',
+				displayName: 'By ID',
+				name: 'itemId',
 				type: 'string',
-				hint: 'Enter the item name',
+				hint: 'Enter the item id',
 				validation: [
 					{
 						type: 'regex',
 						properties: {
 							regex: '^[\\w+=,.@-]+$',
-							errorMessage: 'The item name must follow the allowed pattern.',
+							errorMessage: 'The item id must follow the allowed pattern.',
 						},
 					},
 				],
@@ -409,7 +422,7 @@ export const getFields: INodeProperties[] = [
 
 export const getAllFields: INodeProperties[] = [
 	{
-		displayName: 'Collection ID',
+		displayName: 'Container ID',
 		name: 'collId',
 		type: 'resourceLocator',
 		required: true,
@@ -417,7 +430,7 @@ export const getAllFields: INodeProperties[] = [
 			mode: 'list',
 			value: '',
 		},
-		description: 'Select the collection you want to use',
+		description: 'Select the container you want to use',
 		displayOptions: {
 			show: {
 				resource: ['item'],
@@ -435,20 +448,20 @@ export const getAllFields: INodeProperties[] = [
 				},
 			},
 			{
-				displayName: 'By Name',
-				name: 'collectionName',
+				displayName: 'By ID',
+				name: 'containerId',
 				type: 'string',
-				hint: 'Enter the collection name',
+				hint: 'Enter the container id',
 				validation: [
 					{
 						type: 'regex',
 						properties: {
 							regex: '^[\\w+=,.@-]+$',
-							errorMessage: 'The collection name must follow the allowed pattern.',
+							errorMessage: 'The container name must follow the allowed pattern.',
 						},
 					},
 				],
-				placeholder: 'e.g. UsersCollection',
+				placeholder: 'e.g. UsersContainer',
 			},
 		],
 	},
@@ -494,7 +507,7 @@ export const getAllFields: INodeProperties[] = [
 
 export const queryFields: INodeProperties[] = [
 	{
-		displayName: 'Collection ID',
+		displayName: 'Container ID',
 		name: 'collId',
 		type: 'resourceLocator',
 		required: true,
@@ -502,7 +515,7 @@ export const queryFields: INodeProperties[] = [
 			mode: 'list',
 			value: '',
 		},
-		description: 'Select the collection you want to use',
+		description: 'Select the container you want to use',
 		displayOptions: {
 			show: {
 				resource: ['item'],
@@ -520,20 +533,20 @@ export const queryFields: INodeProperties[] = [
 				},
 			},
 			{
-				displayName: 'By Name',
-				name: 'collectionName',
+				displayName: 'By ID',
+				name: 'containerId',
 				type: 'string',
-				hint: 'Enter the collection name',
+				hint: 'Enter the container id',
 				validation: [
 					{
 						type: 'regex',
 						properties: {
 							regex: '^[\\w+=,.@-]+$',
-							errorMessage: 'The collection name must follow the allowed pattern.',
+							errorMessage: 'The container id must follow the allowed pattern.',
 						},
 					},
 				],
-				placeholder: 'e.g. UsersCollection',
+				placeholder: 'e.g. UsersContainer',
 			},
 		],
 	},
@@ -609,7 +622,7 @@ export const queryFields: INodeProperties[] = [
 
 export const updateFields: INodeProperties[] = [
 	{
-		displayName: 'Collection ID',
+		displayName: 'Container ID',
 		name: 'collId',
 		type: 'resourceLocator',
 		required: true,
@@ -617,7 +630,7 @@ export const updateFields: INodeProperties[] = [
 			mode: 'list',
 			value: '',
 		},
-		description: 'Select the collection you want to use',
+		description: 'Select the container you want to use',
 		displayOptions: {
 			show: {
 				resource: ['item'],
@@ -635,20 +648,20 @@ export const updateFields: INodeProperties[] = [
 				},
 			},
 			{
-				displayName: 'By Name',
-				name: 'collectionName',
+				displayName: 'By ID',
+				name: 'containerId',
 				type: 'string',
-				hint: 'Enter the collection name',
+				hint: 'Enter the container id',
 				validation: [
 					{
 						type: 'regex',
 						properties: {
 							regex: '^[\\w+=,.@-]+$',
-							errorMessage: 'The collection name must follow the allowed pattern.',
+							errorMessage: 'The container name must follow the allowed pattern.',
 						},
 					},
 				],
-				placeholder: 'e.g. UsersCollection',
+				placeholder: 'e.g. UsersContainer',
 			},
 		],
 	},
@@ -679,16 +692,16 @@ export const updateFields: INodeProperties[] = [
 				},
 			},
 			{
-				displayName: 'By Name',
-				name: 'itemName',
+				displayName: 'By ID',
+				name: 'itemId',
 				type: 'string',
-				hint: 'Enter the item name',
+				hint: 'Enter the item id',
 				validation: [
 					{
 						type: 'regex',
 						properties: {
 							regex: '^[\\w+=,.@-]+$',
-							errorMessage: 'The item name must follow the allowed pattern.',
+							errorMessage: 'The item id must follow the allowed pattern.',
 						},
 					},
 				],
@@ -727,25 +740,37 @@ export const updateFields: INodeProperties[] = [
 							{ name: 'Increment', value: 'increment' },
 							{ name: 'Move', value: 'move' },
 							{ name: 'Remove', value: 'remove' },
-							{ name: 'Replace', value: 'replace' },
 							{ name: 'Set', value: 'set' },
 						],
 						default: 'set',
+					},
+					{
+						displayName: 'From',
+						name: 'from',
+						type: 'string',
+						default: '',
+						displayOptions: {
+							show: {
+								op: ['move'],
+							},
+						},
 					},
 					{
 						displayName: 'Path',
 						name: 'path',
 						type: 'string',
 						default: '',
-						placeholder: '/Parents/0/FamilyName',
-						description: 'The path to the document field to be updated',
 					},
 					{
 						displayName: 'Value',
 						name: 'value',
 						type: 'string',
 						default: '',
-						description: 'The value to set (if applicable)',
+						displayOptions: {
+							show: {
+								op: ['add', 'set', 'increment'],
+							},
+						},
 					},
 				],
 			},

@@ -260,8 +260,9 @@ export async function searchItems(
 
 	const results: INodeListSearchItems[] = items
 		.map((item) => {
+			const idWithoutSpaces = String(item.id).replace(/ /g, '');
 			return {
-				name: String(item.id),
+				name: String(idWithoutSpaces),
 				value: String(item.id),
 			};
 		})
@@ -347,6 +348,12 @@ export async function formatCustomProperties(
 	const rawCustomProperties = this.getNodeParameter('customProperties', '{}') as string;
 	const newId = this.getNodeParameter('newId') as string;
 
+	if (/\s/.test(newId)) {
+		throw new ApplicationError(
+			'Invalid ID: IDs cannot contain spaces. Use an underscore (_) or another separator instead.',
+		);
+	}
+
 	let parsedProperties: Record<string, unknown>;
 	try {
 		// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
@@ -420,7 +427,36 @@ export async function formatJSONFields(
 	return requestOptions;
 }
 
-export async function processResponse(
+export async function validateFields(
+	this: IExecuteSingleFunctions,
+	requestOptions: IHttpRequestOptions,
+): Promise<IHttpRequestOptions> {
+	const additionalFields = this.getNodeParameter('additionalFields', {}) as IDataObject;
+	const indexingPolicy = additionalFields.indexingPolicy;
+	const manualThroughput = additionalFields.offerThroughput;
+	const autoscaleThroughput = additionalFields.maxThroughput;
+
+	if (manualThroughput && autoscaleThroughput) {
+		throw new ApplicationError(
+			'You cannot set both "Max RU/s (Autoscale)" and "Max RU/s (Manual Throughput)". Please choose only one.',
+		);
+	}
+	if (autoscaleThroughput && requestOptions?.qs) {
+		requestOptions.qs['x-ms-cosmos-offer-autopilot-settings'] = {
+			maxThroughput: autoscaleThroughput,
+		};
+	}
+
+	if (!indexingPolicy || Object.keys(indexingPolicy).length === 0) {
+		throw new ApplicationError(
+			'Invalid Indexing Policy: Please provide a valid indexingPolicy JSON.',
+		);
+	}
+
+	return requestOptions;
+}
+
+export async function processResponseItems(
 	this: IExecuteSingleFunctions,
 	items: INodeExecutionData[],
 	response: IN8nHttpFullResponse,
@@ -445,48 +481,20 @@ export async function processResponse(
 	return extractedDocuments;
 }
 
-//WIP
-export async function mapOperationsToRequest(
+export async function processResponseContainers(
 	this: IExecuteSingleFunctions,
-	requestOptions: IHttpRequestOptions,
-): Promise<IHttpRequestOptions> {
-	const rawOperations = this.getNodeParameter('operations', []) as {
-		operations: Array<{
-			op: string;
-			path: string;
-			from?: string;
-			value?: string | number;
-		}>;
-	};
-
-	if (!rawOperations || !Array.isArray(rawOperations.operations)) {
-		throw new ApplicationError('Invalid operations format. Expected an array.');
+	items: INodeExecutionData[],
+	response: IN8nHttpFullResponse,
+): Promise<any> {
+	if (!response || typeof response !== 'object' || !Array.isArray(items)) {
+		throw new ApplicationError('Invalid response format from Cosmos DB.');
 	}
 
-	// Map and validate operations
-	const formattedOperations = rawOperations.operations.map((operation) => {
-		const { op, path, from, value } = operation;
+	const data = response.body as { DocumentCollections: IDataObject[] };
 
-		// Validate required fields
-		if (!op || !path) {
-			throw new ApplicationError('Each operation must include "op" and "path".');
-		}
+	if (data.DocumentCollections.length > 0) {
+		return data.DocumentCollections.map((doc) => ({ json: doc }));
+	}
 
-		// Construct operation object
-		const formattedOperation: Record<string, unknown> = { op, path };
-
-		// Add optional fields if they exist
-		if (from && op === 'move') {
-			formattedOperation.from = from;
-		}
-		if (value !== undefined && op !== 'remove') {
-			formattedOperation.value = value;
-		}
-
-		return formattedOperation;
-	});
-
-	requestOptions.body = { operations: formattedOperations };
-
-	return requestOptions;
+	return [];
 }
