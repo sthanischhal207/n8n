@@ -55,7 +55,6 @@ export class MicrosoftCosmosDbSharedKeyApi implements ICredentialType {
 		credentials: ICredentialDataDecryptedObject,
 		requestOptions: IHttpRequestOptions,
 	): Promise<IHttpRequestOptions> {
-		// Remove undefined query parameters?
 		if (requestOptions.qs) {
 			for (const [key, value] of Object.entries(requestOptions.qs)) {
 				if (value === undefined) {
@@ -64,7 +63,6 @@ export class MicrosoftCosmosDbSharedKeyApi implements ICredentialType {
 			}
 		}
 
-		// Add headers for date and version
 		requestOptions.headers ??= {};
 		const date = new Date().toUTCString().toLowerCase();
 		requestOptions.headers = {
@@ -77,8 +75,6 @@ export class MicrosoftCosmosDbSharedKeyApi implements ICredentialType {
 			requestOptions.headers['x-ms-session-token'] = credentials.sessionToken;
 		}
 
-		// This shouldn't be the full url
-		// Refer to https://stackoverflow.com/questions/45645389/documentdb-rest-api-authorization-token-error
 		// const url = new URL (requestOptions.uri);
 
 		const url = new URL(requestOptions.baseURL + requestOptions.url);

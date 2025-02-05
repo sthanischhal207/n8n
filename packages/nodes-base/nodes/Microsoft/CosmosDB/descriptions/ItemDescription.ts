@@ -142,7 +142,6 @@ export const itemOperations: INodeProperties[] = [
 						url: '=/colls/{{ $parameter["collId"] }}/docs/{{ $parameter["id"] }}',
 						headers: {
 							'Content-Type': 'application/json-patch+json',
-							'x-ms-partitionkey': '=["{{$parameter["id"]}}"]',
 							'x-ms-documentdb-partitionkey': '=["{{$parameter["id"]}}"]',
 						},
 					},
