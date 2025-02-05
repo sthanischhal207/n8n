@@ -14,7 +14,7 @@ import {
 export class MicrosoftCosmosDbSharedKeyApi implements ICredentialType {
 	name = 'microsoftCosmosDbSharedKeyApi';
 
-	displayName = 'Azure Cosmos DB API';
+	displayName = 'Cosmos DB API';
 
 	documentationUrl = 'microsoftCosmosDb';
 

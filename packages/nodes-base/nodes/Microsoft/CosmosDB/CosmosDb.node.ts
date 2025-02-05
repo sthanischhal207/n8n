@@ -16,9 +16,9 @@ export class CosmosDb implements INodeType {
 		group: ['transform'],
 		version: 1,
 		subtitle: '={{$parameter["operation"] + ": " + $parameter["resource"]}}',
-		description: 'Interact with Azure Cosmos DB API',
+		description: 'Interact with Cosmos DB API',
 		defaults: {
-			name: 'Azure Cosmos Db',
+			name: 'Cosmos Db',
 		},
 		inputs: [NodeConnectionType.Main],
 		outputs: [NodeConnectionType.Main],
@@ -26,11 +26,6 @@ export class CosmosDb implements INodeType {
 			{
 				name: 'microsoftCosmosDbSharedKeyApi',
 				required: true,
-				displayOptions: {
-					show: {
-						authentication: ['sharedKey'],
-					},
-				},
 			},
 		],
 		requestDefaults: {
@@ -42,27 +37,10 @@ export class CosmosDb implements INodeType {
 		},
 		properties: [
 			{
-				displayName: 'Authentication',
-				name: 'authentication',
-				type: 'options',
-				options: [
-					{
-						name: 'Shared Key',
-						value: 'sharedKey',
-					},
-				],
-				default: 'sharedKey',
-			},
-			{
 				displayName: 'Resource',
 				name: 'resource',
 				type: 'options',
 				noDataExpression: true,
-				routing: {
-					// send: {
-					// 	preSend: [presendStringifyBody],
-					// },
-				},
 				options: [
 					{
 						name: 'Container',

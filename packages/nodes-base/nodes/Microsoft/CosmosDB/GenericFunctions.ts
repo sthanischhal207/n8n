@@ -63,16 +63,6 @@ export function getAuthorizationTokenUsingMasterKey(
 	return `type=master&ver=1.0&sig=${signature}`;
 }
 
-export async function presendStringifyBody(
-	this: IExecuteSingleFunctions,
-	requestOptions: IHttpRequestOptions,
-): Promise<IHttpRequestOptions> {
-	if (requestOptions.body) {
-		requestOptions.body = JSON.stringify(requestOptions.body);
-	}
-	return requestOptions;
-}
-
 export async function handlePagination(
 	this: IExecutePaginationFunctions,
 	resultOptions: DeclarativeRestApiSettings.ResultOptions,
