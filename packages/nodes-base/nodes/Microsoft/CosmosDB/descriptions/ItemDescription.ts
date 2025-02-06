@@ -2,6 +2,7 @@ import type { INodeProperties } from 'n8n-workflow';
 
 import {
 	formatCustomProperties,
+	handleErrorPostReceive,
 	handlePagination,
 	processResponseItems,
 	validateOperations,
@@ -145,6 +146,9 @@ export const itemOperations: INodeProperties[] = [
 							'x-ms-documentdb-partitionkey': '=["{{$parameter["id"]}}"]',
 						},
 					},
+					output: {
+						postReceive: [handleErrorPostReceive],
+					},
 				},
 				action: 'Update item',
 			},
@@ -155,7 +159,7 @@ export const itemOperations: INodeProperties[] = [
 
 export const createFields: INodeProperties[] = [
 	{
-		displayName: 'Container ID',
+		displayName: 'Container',
 		name: 'collId',
 		type: 'resourceLocator',
 		required: true,
@@ -184,7 +188,7 @@ export const createFields: INodeProperties[] = [
 				displayName: 'By ID',
 				name: 'containerId',
 				type: 'string',
-				hint: 'Enter the container ID',
+				hint: 'Enter the container Id',
 				validation: [
 					{
 						type: 'regex',
@@ -239,7 +243,7 @@ export const createFields: INodeProperties[] = [
 
 export const deleteFields: INodeProperties[] = [
 	{
-		displayName: 'Container ID',
+		displayName: 'Container',
 		name: 'collId',
 		type: 'resourceLocator',
 		required: true,
@@ -274,7 +278,7 @@ export const deleteFields: INodeProperties[] = [
 						type: 'regex',
 						properties: {
 							regex: '^[\\w+=,.@-]+$',
-							errorMessage: 'The container name must follow the allowed pattern.',
+							errorMessage: 'The container id must follow the allowed pattern.',
 						},
 					},
 				],
@@ -330,7 +334,7 @@ export const deleteFields: INodeProperties[] = [
 
 export const getFields: INodeProperties[] = [
 	{
-		displayName: 'Container ID',
+		displayName: 'Container',
 		name: 'collId',
 		type: 'resourceLocator',
 		required: true,
@@ -365,7 +369,7 @@ export const getFields: INodeProperties[] = [
 						type: 'regex',
 						properties: {
 							regex: '^[\\w+=,.@-]+$',
-							errorMessage: 'The container name must follow the allowed pattern.',
+							errorMessage: 'The container id must follow the allowed pattern.',
 						},
 					},
 				],
@@ -421,7 +425,7 @@ export const getFields: INodeProperties[] = [
 
 export const getAllFields: INodeProperties[] = [
 	{
-		displayName: 'Container ID',
+		displayName: 'Container',
 		name: 'collId',
 		type: 'resourceLocator',
 		required: true,
@@ -456,7 +460,7 @@ export const getAllFields: INodeProperties[] = [
 						type: 'regex',
 						properties: {
 							regex: '^[\\w+=,.@-]+$',
-							errorMessage: 'The container name must follow the allowed pattern.',
+							errorMessage: 'The container id must follow the allowed pattern.',
 						},
 					},
 				],
@@ -506,7 +510,7 @@ export const getAllFields: INodeProperties[] = [
 
 export const queryFields: INodeProperties[] = [
 	{
-		displayName: 'Container ID',
+		displayName: 'Container',
 		name: 'collId',
 		type: 'resourceLocator',
 		required: true,
@@ -621,7 +625,7 @@ export const queryFields: INodeProperties[] = [
 
 export const updateFields: INodeProperties[] = [
 	{
-		displayName: 'Container ID',
+		displayName: 'Container',
 		name: 'collId',
 		type: 'resourceLocator',
 		required: true,
@@ -656,7 +660,7 @@ export const updateFields: INodeProperties[] = [
 						type: 'regex',
 						properties: {
 							regex: '^[\\w+=,.@-]+$',
-							errorMessage: 'The container name must follow the allowed pattern.',
+							errorMessage: 'The container id must follow the allowed pattern.',
 						},
 					},
 				],
@@ -736,29 +740,112 @@ export const updateFields: INodeProperties[] = [
 						type: 'options',
 						options: [
 							{ name: 'Add', value: 'add' },
-							{ name: 'Increment', value: 'increment' },
+							{ name: 'Increment', value: 'incr' },
 							{ name: 'Move', value: 'move' },
 							{ name: 'Remove', value: 'remove' },
+							{ name: 'Replace', value: 'replace' },
 							{ name: 'Set', value: 'set' },
 						],
 						default: 'set',
 					},
 					{
-						displayName: 'From',
+						displayName: 'From Path',
 						name: 'from',
-						type: 'string',
-						default: '',
+						type: 'resourceLocator',
+						description: 'Select a field from the list or enter it manually',
 						displayOptions: {
 							show: {
 								op: ['move'],
 							},
 						},
+						default: {
+							mode: 'list',
+							value: '',
+						},
+						modes: [
+							{
+								displayName: 'From List',
+								name: 'list',
+								type: 'list',
+								typeOptions: {
+									searchListMethod: 'getDynamicFields',
+									searchable: true,
+								},
+							},
+							{
+								displayName: 'By Name',
+								name: 'manual',
+								type: 'string',
+								hint: 'Enter the field name manually',
+								placeholder: 'e.g. /Parents/0/FamilyName',
+							},
+						],
+					},
+					{
+						displayName: 'To Path',
+						name: 'toPath',
+						type: 'resourceLocator',
+						description: 'Select a field from the list or enter it manually',
+						displayOptions: {
+							show: {
+								op: ['move'],
+							},
+						},
+						default: {
+							mode: 'list',
+							value: '',
+						},
+						modes: [
+							{
+								displayName: 'From List',
+								name: 'list',
+								type: 'list',
+								typeOptions: {
+									searchListMethod: 'getDynamicFields',
+									searchable: true,
+								},
+							},
+							{
+								displayName: 'By Name',
+								name: 'manual',
+								type: 'string',
+								hint: 'Enter the field name manually',
+								placeholder: 'e.g. /Parents/0/FamilyName',
+							},
+						],
 					},
 					{
 						displayName: 'Path',
 						name: 'path',
-						type: 'string',
-						default: '',
+						type: 'resourceLocator',
+						description: 'Select a field from the list or enter it manually',
+						default: {
+							mode: 'list',
+							value: '',
+						},
+						displayOptions: {
+							show: {
+								op: ['add', 'remove', 'set', 'incr', 'replace'],
+							},
+						},
+						modes: [
+							{
+								displayName: 'From List',
+								name: 'list',
+								type: 'list',
+								typeOptions: {
+									searchListMethod: 'getDynamicFields',
+									searchable: true,
+								},
+							},
+							{
+								displayName: 'By Name',
+								name: 'manual',
+								type: 'string',
+								hint: 'Enter the field name manually',
+								placeholder: 'e.g. /Parents/0/FamilyName',
+							},
+						],
 					},
 					{
 						displayName: 'Value',
@@ -767,20 +854,13 @@ export const updateFields: INodeProperties[] = [
 						default: '',
 						displayOptions: {
 							show: {
-								op: ['add', 'set', 'increment'],
+								op: ['add', 'set', 'replace', 'incr'],
 							},
 						},
 					},
 				],
 			},
 		],
-		routing: {
-			send: {
-				type: 'body',
-				property: 'operations',
-				value: '={{ $parameter["operations"].operations }}',
-			},
-		},
 	},
 ];
 

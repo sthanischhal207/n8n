@@ -118,6 +118,41 @@ export async function handlePagination(
 	return aggregatedResult.map((result) => ({ json: result }));
 }
 
+export async function handleErrorPostReceive(
+	this: IExecuteSingleFunctions,
+	data: INodeExecutionData[],
+	response: IN8nHttpFullResponse,
+): Promise<INodeExecutionData[]> {
+	if (String(response.statusCode).startsWith('4') || String(response.statusCode).startsWith('5')) {
+		const responseBody = response.body as IDataObject;
+
+		let errorMessage = 'Unknown error occurred';
+
+		if (typeof responseBody.message === 'string') {
+			try {
+				const jsonMatch = responseBody.message.match(/Message: (\{.*\})/);
+
+				if (jsonMatch && jsonMatch[1]) {
+					const parsedMessage = JSON.parse(jsonMatch[1]);
+
+					if (
+						parsedMessage.Errors &&
+						Array.isArray(parsedMessage.Errors) &&
+						parsedMessage.Errors.length > 0
+					) {
+						errorMessage = parsedMessage.Errors[0].split(' Learn more:')[0].trim();
+					}
+				}
+			} catch (error) {
+				errorMessage = 'Failed to extract error message';
+			}
+		}
+
+		throw new ApplicationError(errorMessage);
+	}
+	return data;
+}
+
 export async function microsoftCosmosDbRequest(
 	this: ILoadOptionsFunctions,
 	opts: IHttpRequestOptions,
@@ -133,6 +168,7 @@ export async function microsoftCosmosDbRequest(
 		...opts,
 		baseURL: `${credentials.baseUrl}`,
 		headers: {
+			...opts.headers,
 			Accept: 'application/json',
 			'Content-Type': 'application/json',
 		},
@@ -298,35 +334,69 @@ export async function validateOperations(
 	requestOptions: IHttpRequestOptions,
 ): Promise<IHttpRequestOptions> {
 	const rawOperations = this.getNodeParameter('operations', []) as IDataObject;
-	console.log('Operations', rawOperations);
+
 	if (!rawOperations || !Array.isArray(rawOperations.operations)) {
 		throw new ApplicationError('The "operations" field must contain at least one operation.');
 	}
 
 	const operations = rawOperations.operations as Array<{
 		op: string;
-		path: string;
-		value?: string;
+		path?: { mode: string; value: string };
+		toPath?: { mode: string; value: string };
+		from?: { mode: string; value: string };
+		value?: string | number;
 	}>;
 
-	for (const operation of operations) {
-		if (!['add', 'increment', 'move', 'remove', 'replace', 'set'].includes(operation.op)) {
-			throw new ApplicationError(
-				`Invalid operation type "${operation.op}". Allowed values are "add", "increment", "move", "remove", "replace", and "set".`,
-			);
-		}
-
-		if (!operation.path || operation.path.trim() === '') {
+	const transformedOperations = operations.map((operation) => {
+		if (
+			operation.op !== 'move' &&
+			(!operation.path?.value ||
+				typeof operation.path.value !== 'string' ||
+				operation.path.value.trim() === '')
+		) {
 			throw new ApplicationError('Each operation must have a valid "path".');
 		}
 
 		if (
-			['set', 'replace', 'add', 'increment'].includes(operation.op) &&
+			['set', 'replace', 'add', 'incr'].includes(operation.op) &&
 			(operation.value === undefined || operation.value === null)
 		) {
-			throw new ApplicationError(`The operation "${operation.op}" must include a valid "value".`);
+			throw new ApplicationError(`The "${operation.op}" operation must include a valid "value".`);
 		}
-	}
+
+		if (operation.op === 'move') {
+			if (
+				!operation.from?.value ||
+				typeof operation.from.value !== 'string' ||
+				operation.from.value.trim() === ''
+			) {
+				throw new ApplicationError('The "move" operation must have a valid "from" path.');
+			}
+
+			if (
+				!operation.toPath?.value ||
+				typeof operation.toPath.value !== 'string' ||
+				operation.toPath.value.trim() === ''
+			) {
+				throw new ApplicationError('The "move" operation must have a valid "toPath".');
+			}
+		}
+
+		if (operation.op === 'incr' && isNaN(Number(operation.value))) {
+			throw new ApplicationError('The "increment" operation must have a numeric value.');
+		}
+
+		return {
+			op: operation.op,
+			path: operation.op === 'move' ? operation.toPath?.value : operation.path?.value,
+			...(operation.from ? { from: operation.from.value } : {}),
+			...(operation.op === 'incr'
+				? { value: Number(operation.value) }
+				: { value: isNaN(Number(operation.value)) ? operation.value : Number(operation.value) }),
+		};
+	});
+
+	requestOptions.body = transformedOperations;
 
 	return requestOptions;
 }
@@ -487,4 +557,86 @@ export async function processResponseContainers(
 	}
 
 	return [];
+}
+
+function extractFieldPaths(obj: any, prefix = ''): string[] {
+	let paths: string[] = [];
+
+	Object.entries(obj).forEach(([key, value]) => {
+		if (key.startsWith('_') || key === 'id') {
+			return;
+		}
+		const newPath = prefix ? `${prefix}/${key}` : `/${key}`;
+		if (Array.isArray(value) && value.length > 0) {
+			value.forEach((item, index) => {
+				if (typeof item === 'object' && item !== null) {
+					paths = paths.concat(extractFieldPaths(item, `${newPath}/${index}`));
+				} else {
+					paths.push(`${newPath}/${index}`);
+				}
+			});
+		} else if (typeof value === 'object' && value !== null) {
+			paths = paths.concat(extractFieldPaths(value, newPath));
+		} else {
+			paths.push(newPath);
+		}
+	});
+
+	return paths;
+}
+
+export async function searchItemById(
+	this: ILoadOptionsFunctions,
+	itemId: string,
+): Promise<IDataObject | null> {
+	const collection = this.getNodeParameter('collId') as { mode: string; value: string };
+
+	if (!collection?.value) {
+		throw new ApplicationError('Collection ID is required.');
+	}
+
+	if (!itemId) {
+		throw new ApplicationError('Item ID is required.');
+	}
+
+	const opts: IHttpRequestOptions = {
+		method: 'GET',
+		url: `/colls/${collection.value}/docs/${itemId}`,
+		headers: {
+			'x-ms-documentdb-partitionkey': `["${itemId}"]`,
+		},
+	};
+
+	const responseData: IDataObject = await microsoftCosmosDbRequest.call(this, opts);
+
+	if (!responseData) {
+		return null;
+	}
+
+	return responseData;
+}
+
+export async function getDynamicFields(
+	this: ILoadOptionsFunctions,
+): Promise<INodeListSearchResult> {
+	const itemId = this.getNodeParameter('id', '') as { mode: string; value: string };
+
+	if (!itemId) {
+		throw new ApplicationError('Item ID is required to fetch fields.');
+	}
+
+	const itemData = await searchItemById.call(this, itemId.value);
+
+	if (!itemData) {
+		throw new ApplicationError(`Item with ID "${itemId.value}" not found.`);
+	}
+
+	const fieldPaths = extractFieldPaths(itemData);
+
+	return {
+		results: fieldPaths.map((path) => ({
+			name: path,
+			value: path,
+		})),
+	};
 }
