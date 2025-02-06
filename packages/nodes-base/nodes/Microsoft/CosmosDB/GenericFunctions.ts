@@ -11,7 +11,7 @@ import type {
 	INodeListSearchItems,
 	INodeListSearchResult,
 } from 'n8n-workflow';
-import { ApplicationError } from 'n8n-workflow';
+import { ApplicationError, NodeApiError } from 'n8n-workflow';
 
 export const HeaderConstants = {
 	// Required
@@ -123,9 +123,11 @@ export async function handleErrorPostReceive(
 	data: INodeExecutionData[],
 	response: IN8nHttpFullResponse,
 ): Promise<INodeExecutionData[]> {
+	console.log('Status code❌', response.statusCode);
+
 	if (String(response.statusCode).startsWith('4') || String(response.statusCode).startsWith('5')) {
 		const responseBody = response.body as IDataObject;
-
+		console.log('Got here ❌', responseBody);
 		let errorMessage = 'Unknown error occurred';
 
 		if (typeof responseBody.message === 'string') {
@@ -386,6 +388,7 @@ export async function validateOperations(
 			throw new ApplicationError('The "increment" operation must have a numeric value.');
 		}
 
+		//To-Do-check to not send properties it doesn't need
 		return {
 			op: operation.op,
 			path: operation.op === 'move' ? operation.toPath?.value : operation.path?.value,
@@ -639,4 +642,157 @@ export async function getDynamicFields(
 			value: path,
 		})),
 	};
+}
+
+export async function fetchPartitionKeyField(
+	this: ILoadOptionsFunctions,
+): Promise<INodeListSearchResult> {
+	const collection = this.getNodeParameter('collId', '') as { mode: string; value: string };
+
+	if (!collection?.value) {
+		throw new ApplicationError('Collection ID is required to determine the partition key.');
+	}
+
+	const opts: IHttpRequestOptions = {
+		method: 'GET',
+		url: `/colls/${collection.value}`,
+	};
+
+	const responseData: IDataObject = await microsoftCosmosDbRequest.call(this, opts);
+
+	const partitionKey = responseData.partitionKey as
+		| {
+				paths: string[];
+				kind: string;
+				version: number;
+		  }
+		| undefined;
+
+	const partitionKeyPaths = partitionKey?.paths ?? [];
+
+	if (partitionKeyPaths.length === 0) {
+		return { results: [] };
+	}
+
+	const partitionKeyField = partitionKeyPaths[0].replace('/', '');
+
+	return {
+		results: [
+			{
+				name: partitionKeyField,
+				value: partitionKeyField,
+			},
+		],
+	};
+}
+
+export async function validatePartitionKey(
+	this: IExecuteSingleFunctions,
+	requestOptions: IHttpRequestOptions,
+): Promise<IHttpRequestOptions> {
+	const operation = this.getNodeParameter('operation') as string;
+	const customProperties = this.getNodeParameter('customProperties', {}) as IDataObject;
+
+	const partitionKeyResult = await fetchPartitionKeyField.call(
+		this as unknown as ILoadOptionsFunctions,
+	);
+	const partitionKeyField =
+		partitionKeyResult.results.length > 0 ? partitionKeyResult.results[0].value : '';
+
+	if (!partitionKeyField) {
+		throw new NodeApiError(
+			this.getNode(),
+			{},
+			{
+				message: 'Partition key not found',
+				description: 'Failed to determine the partition key for this collection.',
+			},
+		);
+	}
+
+	if (!(typeof partitionKeyField === 'string' || typeof partitionKeyField === 'number')) {
+		throw new NodeApiError(
+			this.getNode(),
+			{},
+			{
+				message: 'Invalid partition key',
+				description: `Partition key must be a string or number, but got ${typeof partitionKeyField}.`,
+			},
+		);
+	}
+
+	let parsedProperties: Record<string, unknown>;
+
+	try {
+		// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+		parsedProperties =
+			typeof customProperties === 'string' ? JSON.parse(customProperties) : customProperties;
+	} catch (error) {
+		throw new NodeApiError(
+			this.getNode(),
+			{},
+			{
+				message: 'Invalid custom properties format',
+				description: 'Custom properties must be a valid JSON object.',
+			},
+		);
+	}
+	let id: string | undefined | { mode: string; value: string };
+	let partitionKeyValue: string | undefined;
+
+	if (operation === 'create') {
+		if (partitionKeyField === 'id') {
+			partitionKeyValue = this.getNodeParameter('newId', '') as string;
+		} else {
+			if (!Object.prototype.hasOwnProperty.call(parsedProperties, partitionKeyField)) {
+				throw new NodeApiError(
+					this.getNode(),
+					{},
+					{
+						message: 'Partition key not found in custom properties',
+						description: `Partition key "${partitionKeyField}" must be present and have a valid, non-empty value in custom properties.`,
+					},
+				);
+			}
+			partitionKeyValue = parsedProperties[partitionKeyField] as string;
+		}
+	} else {
+		if (partitionKeyField === 'id') {
+			id = this.getNodeParameter('id', {}) as { mode: string; value: string };
+
+			if (!id?.value) {
+				throw new NodeApiError(
+					this.getNode(),
+					{},
+					{
+						message: 'Item ID is missing or invalid',
+						description: "The item must have a valid value selected from 'Item'",
+					},
+				);
+			}
+
+			partitionKeyValue = id.value;
+		} else {
+			const additionalFields = this.getNodeParameter('additionalFields', {}) as IDataObject;
+			partitionKeyValue = additionalFields.partitionKey as string;
+		}
+	}
+
+	if (partitionKeyValue === undefined || partitionKeyValue === null || partitionKeyValue === '') {
+		throw new NodeApiError(
+			this.getNode(),
+			{},
+			{
+				message: 'Partition key value is missing or empty',
+				description: `Provide a value for partition key "${partitionKeyField}" in "Partition Key" field.`,
+			},
+		);
+	}
+
+	requestOptions.headers = {
+		...requestOptions.headers,
+		'x-ms-documentdb-partitionkey': `["${partitionKeyValue}"]`,
+	};
+
+	return requestOptions;
 }

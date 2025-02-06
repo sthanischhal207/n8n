@@ -79,7 +79,6 @@ export class MicrosoftCosmosDbSharedKeyApi implements ICredentialType {
 
 		const url = new URL(requestOptions.baseURL + requestOptions.url);
 		const pathSegments = url.pathname.split('/').filter((segment) => segment);
-		console.log('Filtered Path Segments:', pathSegments);
 
 		let resourceType = '';
 		let resourceId = '';

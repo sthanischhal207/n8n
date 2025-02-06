@@ -6,6 +6,7 @@ import {
 	handlePagination,
 	processResponseItems,
 	validateOperations,
+	validatePartitionKey,
 	validateQueryParameters,
 } from '../GenericFunctions';
 
@@ -27,17 +28,17 @@ export const itemOperations: INodeProperties[] = [
 				description: 'Create a new item',
 				routing: {
 					send: {
-						preSend: [formatCustomProperties],
+						preSend: [formatCustomProperties, validatePartitionKey],
 					},
 					request: {
-						ignoreHttpStatusErrors: true,
 						method: 'POST',
 						url: '=/colls/{{ $parameter["collId"] }}/docs',
-						//To-Do-do it based on the partition key of collection and only one
 						headers: {
-							'x-ms-documentdb-partitionkey': '=["{{$parameter["newId"]}}"]',
 							'x-ms-documentdb-is-upsert': 'True',
 						},
+					},
+					output: {
+						postReceive: [handleErrorPostReceive],
 					},
 				},
 				action: 'Create item',
@@ -47,17 +48,16 @@ export const itemOperations: INodeProperties[] = [
 				value: 'delete',
 				description: 'Delete an existing item',
 				routing: {
+					send: {
+						preSend: [validatePartitionKey],
+					},
 					request: {
-						ignoreHttpStatusErrors: true,
 						method: 'DELETE',
 						url: '=/colls/{{ $parameter["collId"] }}/docs/{{ $parameter["id"] }}',
-						//To-Do-do it based on the partition key of collection and only one
-						headers: {
-							'x-ms-documentdb-partitionkey': '=["{{$parameter["id"]}}"]',
-						},
 					},
 					output: {
 						postReceive: [
+							handleErrorPostReceive,
 							{
 								type: 'set',
 								properties: {
@@ -74,15 +74,18 @@ export const itemOperations: INodeProperties[] = [
 				value: 'get',
 				description: 'Retrieve an item',
 				routing: {
+					send: {
+						preSend: [validatePartitionKey],
+					},
 					request: {
-						ignoreHttpStatusErrors: true,
 						method: 'GET',
 						url: '=/colls/{{ $parameter["collId"]}}/docs/{{$parameter["id"]}}',
 						headers: {
-							//To-Do-do it based on the partition key of collection and only one
-							'x-ms-documentdb-partitionkey': '=["{{$parameter["id"]}}"]',
 							'x-ms-documentdb-is-upsert': 'True',
 						},
+					},
+					output: {
+						postReceive: [handleErrorPostReceive],
 					},
 				},
 				action: 'Get item',
@@ -99,12 +102,11 @@ export const itemOperations: INodeProperties[] = [
 						pagination: handlePagination,
 					},
 					request: {
-						ignoreHttpStatusErrors: true,
 						method: 'GET',
 						url: '=/colls/{{ $parameter["collId"] }}/docs',
 					},
 					output: {
-						postReceive: [processResponseItems],
+						postReceive: [processResponseItems, handleErrorPostReceive],
 					},
 				},
 				action: 'Get many items',
@@ -118,13 +120,15 @@ export const itemOperations: INodeProperties[] = [
 						preSend: [validateQueryParameters],
 					},
 					request: {
-						ignoreHttpStatusErrors: true,
 						method: 'POST',
 						url: '=/colls/{{ $parameter["collId"] }}/docs',
 						headers: {
 							'Content-Type': 'application/query+json',
 							'x-ms-documentdb-isquery': 'True',
 						},
+					},
+					output: {
+						postReceive: [handleErrorPostReceive],
 					},
 				},
 				action: 'Query items',
@@ -135,15 +139,13 @@ export const itemOperations: INodeProperties[] = [
 				description: 'Update an existing item',
 				routing: {
 					send: {
-						preSend: [validateOperations],
+						preSend: [validateOperations, validatePartitionKey],
 					},
 					request: {
-						ignoreHttpStatusErrors: true,
 						method: 'PATCH',
 						url: '=/colls/{{ $parameter["collId"] }}/docs/{{ $parameter["id"] }}',
 						headers: {
 							'Content-Type': 'application/json-patch+json',
-							'x-ms-documentdb-partitionkey': '=["{{$parameter["id"]}}"]',
 						},
 					},
 					output: {
@@ -330,6 +332,28 @@ export const deleteFields: INodeProperties[] = [
 			},
 		],
 	},
+	{
+		displayName: 'Additional Fields',
+		name: 'additionalFields',
+		type: 'collection',
+		placeholder: 'Add Partition Key',
+		default: {},
+		displayOptions: {
+			show: {
+				resource: ['item'],
+				operation: ['delete'],
+			},
+		},
+		options: [
+			{
+				displayName: 'Partition Key',
+				name: 'partitionKey',
+				type: 'string',
+				default: '',
+				description: 'Specify the partition key for this item',
+			},
+		],
+	},
 ];
 
 export const getFields: INodeProperties[] = [
@@ -418,6 +442,28 @@ export const getFields: INodeProperties[] = [
 					},
 				],
 				placeholder: 'e.g. AndersenFamily',
+			},
+		],
+	},
+	{
+		displayName: 'Additional Fields',
+		name: 'additionalFields',
+		type: 'collection',
+		placeholder: 'Add Partition Key',
+		default: {},
+		displayOptions: {
+			show: {
+				resource: ['item'],
+				operation: ['get'],
+			},
+		},
+		options: [
+			{
+				displayName: 'Partition Key',
+				name: 'partitionKey',
+				type: 'string',
+				default: '',
+				description: 'Specify the partition key for this item',
 			},
 		],
 	},
@@ -859,6 +905,28 @@ export const updateFields: INodeProperties[] = [
 						},
 					},
 				],
+			},
+		],
+	},
+	{
+		displayName: 'Additional Fields',
+		name: 'additionalFields',
+		type: 'collection',
+		placeholder: 'Add Partition Key',
+		default: {},
+		displayOptions: {
+			show: {
+				resource: ['item'],
+				operation: ['update'],
+			},
+		},
+		options: [
+			{
+				displayName: 'Partition Key',
+				name: 'partitionKey',
+				type: 'string',
+				default: '',
+				description: 'Specify the partition key for this item',
 			},
 		],
 	},
