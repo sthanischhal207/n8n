@@ -14,16 +14,11 @@ import type {
 import { ApplicationError, NodeApiError } from 'n8n-workflow';
 
 export const HeaderConstants = {
-	// Required
 	AUTHORIZATION: 'Authorization',
 	CONTENT_TYPE: 'Content-Type',
 	X_MS_DATE: 'x-ms-date',
 	X_MS_VERSION: 'x-ms-version',
-
-	//Required - for session consistency only
 	X_MS_SESSION_TOKEN: 'x-ms-session-token',
-
-	// Optional
 	IF_MATCH: 'If-Match',
 	IF_NONE_MATCH: 'If-None-Match',
 	IF_MODIFIED_SINCE: 'If-Modified-Since',
@@ -63,98 +58,6 @@ export function getAuthorizationTokenUsingMasterKey(
 	return `type=master&ver=1.0&sig=${signature}`;
 }
 
-export async function handlePagination(
-	this: IExecutePaginationFunctions,
-	resultOptions: DeclarativeRestApiSettings.ResultOptions,
-): Promise<INodeExecutionData[]> {
-	const aggregatedResult: IDataObject[] = [];
-	let nextPageToken: string | undefined;
-	const returnAll = this.getNodeParameter('returnAll') as boolean;
-	let limit = 60;
-
-	if (!returnAll) {
-		limit = this.getNodeParameter('limit') as number;
-		resultOptions.maxResults = limit;
-	}
-
-	resultOptions.paginate = true;
-
-	do {
-		if (nextPageToken) {
-			resultOptions.options.headers = resultOptions.options.headers ?? {};
-			resultOptions.options.headers['x-ms-continuation'] = nextPageToken;
-		}
-
-		const responseData = await this.makeRoutingRequest(resultOptions);
-
-		if (Array.isArray(responseData)) {
-			for (const responsePage of responseData) {
-				aggregatedResult.push(responsePage);
-
-				if (!returnAll && aggregatedResult.length >= limit) {
-					return aggregatedResult.slice(0, limit).map((result) => ({ json: result }));
-				}
-			}
-		}
-
-		//TO-DO-check-if-works
-		if (responseData.length > 0) {
-			const lastItem = responseData[responseData.length - 1];
-
-			if ('headers' in lastItem) {
-				const headers = (lastItem as unknown as { headers: { [key: string]: string } }).headers;
-
-				if (headers) {
-					nextPageToken = headers['x-ms-continuation'] as string | undefined;
-				}
-			}
-		}
-
-		if (!nextPageToken) {
-			break;
-		}
-	} while (nextPageToken);
-
-	return aggregatedResult.map((result) => ({ json: result }));
-}
-
-export async function handleErrorPostReceive(
-	this: IExecuteSingleFunctions,
-	data: INodeExecutionData[],
-	response: IN8nHttpFullResponse,
-): Promise<INodeExecutionData[]> {
-	console.log('Status code❌', response.statusCode);
-
-	if (String(response.statusCode).startsWith('4') || String(response.statusCode).startsWith('5')) {
-		const responseBody = response.body as IDataObject;
-		console.log('Got here ❌', responseBody);
-		let errorMessage = 'Unknown error occurred';
-
-		if (typeof responseBody.message === 'string') {
-			try {
-				const jsonMatch = responseBody.message.match(/Message: (\{.*\})/);
-
-				if (jsonMatch && jsonMatch[1]) {
-					const parsedMessage = JSON.parse(jsonMatch[1]);
-
-					if (
-						parsedMessage.Errors &&
-						Array.isArray(parsedMessage.Errors) &&
-						parsedMessage.Errors.length > 0
-					) {
-						errorMessage = parsedMessage.Errors[0].split(' Learn more:')[0].trim();
-					}
-				}
-			} catch (error) {
-				errorMessage = 'Failed to extract error message';
-			}
-		}
-
-		throw new ApplicationError(errorMessage);
-	}
-	return data;
-}
-
 export async function microsoftCosmosDbRequest(
 	this: ILoadOptionsFunctions,
 	opts: IHttpRequestOptions,
@@ -178,6 +81,12 @@ export async function microsoftCosmosDbRequest(
 	};
 
 	const errorMapping: Record<number, Record<string, string>> = {
+		401: {
+			'The security token included in the request is invalid.':
+				'The Cosmos DB credentials are not valid!',
+			'The request signature we calculated does not match the signature you provided':
+				'The Cosmos DB credentials are not valid!',
+		},
 		403: {
 			'The security token included in the request is invalid.':
 				'The Cosmos DB credentials are not valid!',
@@ -226,431 +135,20 @@ export async function microsoftCosmosDbRequest(
 	}
 }
 
-export async function searchCollections(
-	this: ILoadOptionsFunctions,
-	filter?: string,
-): Promise<INodeListSearchResult> {
-	const opts: IHttpRequestOptions = {
-		method: 'GET',
-		url: '/colls',
-	};
-
-	const responseData: IDataObject = await microsoftCosmosDbRequest.call(this, opts);
-
-	const responseBody = responseData as {
-		DocumentCollections: IDataObject[];
-	};
-	const collections = responseBody.DocumentCollections;
-
-	if (!collections) {
-		return { results: [] };
-	}
-
-	const results: INodeListSearchItems[] = collections
-		.map((collection) => {
-			return {
-				name: String(collection.id),
-				value: String(collection.id),
-			};
-		})
-		.filter((collection) => !filter || collection.name.includes(filter))
-		.sort((a, b) => a.name.localeCompare(b.name));
-
-	return {
-		results,
-	};
-}
-
-export async function searchItems(
-	this: ILoadOptionsFunctions,
-	filter?: string,
-): Promise<INodeListSearchResult> {
-	const collection = this.getNodeParameter('collId') as { mode: string; value: string };
-
-	if (!collection?.value) {
-		throw new ApplicationError('Collection ID is required.');
-	}
-	const opts: IHttpRequestOptions = {
-		method: 'GET',
-		url: `/colls/${collection.value}/docs`,
-	};
-
-	const responseData: IDataObject = await microsoftCosmosDbRequest.call(this, opts);
-
-	const responseBody = responseData as {
-		Documents: IDataObject[];
-	};
-	const items = responseBody.Documents;
-
-	if (!items) {
-		return { results: [] };
-	}
-
-	const results: INodeListSearchItems[] = items
-		.map((item) => {
-			const idWithoutSpaces = String(item.id).replace(/ /g, '');
-			return {
-				name: String(idWithoutSpaces),
-				value: String(item.id),
-			};
-		})
-		.filter((item) => !filter || item.name.includes(filter))
-		.sort((a, b) => a.name.localeCompare(b.name));
-
-	return {
-		results,
-	};
-}
-
-export async function validateQueryParameters(
-	this: IExecuteSingleFunctions,
-	requestOptions: IHttpRequestOptions,
-): Promise<IHttpRequestOptions> {
-	const params = this.getNodeParameter('parameters', {}) as {
-		parameters: Array<{ name: string; value: string }>;
-	};
-
-	if (!params || !Array.isArray(params.parameters)) {
-		throw new ApplicationError(
-			'The "parameters" field cannot be empty. Please add at least one parameter.',
-		);
-	}
-
-	const parameters = params.parameters;
-
-	for (const parameter of parameters) {
-		if (!parameter.name || parameter.name.trim() === '') {
-			throw new ApplicationError('Each parameter must have a non-empty "name".');
-		}
-
-		if (!parameter.value) {
-			throw new ApplicationError(`The parameter "${parameter.name}" must have a valid "value".`);
-		}
-	}
-
-	return requestOptions;
-}
-
-export async function validateOperations(
-	this: IExecuteSingleFunctions,
-	requestOptions: IHttpRequestOptions,
-): Promise<IHttpRequestOptions> {
-	const rawOperations = this.getNodeParameter('operations', []) as IDataObject;
-
-	if (!rawOperations || !Array.isArray(rawOperations.operations)) {
-		throw new ApplicationError('The "operations" field must contain at least one operation.');
-	}
-
-	const operations = rawOperations.operations as Array<{
-		op: string;
-		path?: { mode: string; value: string };
-		toPath?: { mode: string; value: string };
-		from?: { mode: string; value: string };
-		value?: string | number;
-	}>;
-
-	const transformedOperations = operations.map((operation) => {
-		if (
-			operation.op !== 'move' &&
-			(!operation.path?.value ||
-				typeof operation.path.value !== 'string' ||
-				operation.path.value.trim() === '')
-		) {
-			throw new ApplicationError('Each operation must have a valid "path".');
-		}
-
-		if (
-			['set', 'replace', 'add', 'incr'].includes(operation.op) &&
-			(operation.value === undefined || operation.value === null)
-		) {
-			throw new ApplicationError(`The "${operation.op}" operation must include a valid "value".`);
-		}
-
-		if (operation.op === 'move') {
-			if (
-				!operation.from?.value ||
-				typeof operation.from.value !== 'string' ||
-				operation.from.value.trim() === ''
-			) {
-				throw new ApplicationError('The "move" operation must have a valid "from" path.');
-			}
-
-			if (
-				!operation.toPath?.value ||
-				typeof operation.toPath.value !== 'string' ||
-				operation.toPath.value.trim() === ''
-			) {
-				throw new ApplicationError('The "move" operation must have a valid "toPath".');
-			}
-		}
-
-		if (operation.op === 'incr' && isNaN(Number(operation.value))) {
-			throw new ApplicationError('The "increment" operation must have a numeric value.');
-		}
-
-		//To-Do-check to not send properties it doesn't need
-		return {
-			op: operation.op,
-			path: operation.op === 'move' ? operation.toPath?.value : operation.path?.value,
-			...(operation.from ? { from: operation.from.value } : {}),
-			...(operation.op === 'incr'
-				? { value: Number(operation.value) }
-				: { value: isNaN(Number(operation.value)) ? operation.value : Number(operation.value) }),
-		};
-	});
-
-	requestOptions.body = transformedOperations;
-
-	return requestOptions;
-}
-
-export async function formatCustomProperties(
-	this: IExecuteSingleFunctions,
-	requestOptions: IHttpRequestOptions,
-): Promise<IHttpRequestOptions> {
-	const rawCustomProperties = this.getNodeParameter('customProperties', '{}') as string;
-	const newId = this.getNodeParameter('newId') as string;
-
-	if (/\s/.test(newId)) {
-		throw new ApplicationError(
-			'Invalid ID: IDs cannot contain spaces. Use an underscore (_) or another separator instead.',
-		);
-	}
-
-	let parsedProperties: Record<string, unknown>;
-	try {
-		// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-		parsedProperties = JSON.parse(rawCustomProperties);
-	} catch (error) {
-		throw new ApplicationError(
-			'Invalid JSON format in "Custom Properties". Please provide a valid JSON object.',
-		);
-	}
-
-	if (
-		typeof parsedProperties !== 'object' ||
-		parsedProperties === null ||
-		Array.isArray(parsedProperties)
-	) {
-		throw new ApplicationError('The "Custom Properties" field must be a valid JSON object.');
-	}
-
-	if (
-		!requestOptions.body ||
-		typeof requestOptions.body !== 'object' ||
-		requestOptions.body === null
-	) {
-		requestOptions.body = {};
-	}
-
-	Object.assign(requestOptions.body as Record<string, unknown>, { id: newId }, parsedProperties);
-
-	return requestOptions;
-}
-
-export async function formatJSONFields(
-	this: IExecuteSingleFunctions,
-	requestOptions: IHttpRequestOptions,
-): Promise<IHttpRequestOptions> {
-	const rawPartitionKey = this.getNodeParameter('partitionKey', '{}') as string;
-	const additionalFields = this.getNodeParameter('additionalFields', {}) as IDataObject;
-	const indexingPolicy = additionalFields.indexingPolicy as string;
-
-	let parsedPartitionKey: Record<string, unknown>;
-	let parsedIndexPolicy: Record<string, unknown> | undefined;
-
-	try {
-		// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-		parsedPartitionKey = JSON.parse(rawPartitionKey);
-
-		if (indexingPolicy) {
-			// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-			parsedIndexPolicy = JSON.parse(indexingPolicy);
-		}
-	} catch (error) {
-		throw new ApplicationError(
-			'Invalid JSON format in either "Partition Key" or "Indexing Policy". Please provide valid JSON objects.',
-		);
-	}
-
-	if (
-		!requestOptions.body ||
-		typeof requestOptions.body !== 'object' ||
-		requestOptions.body === null
-	) {
-		requestOptions.body = {};
-	}
-
-	(requestOptions.body as Record<string, unknown>).partitionKey = parsedPartitionKey;
-
-	if (parsedIndexPolicy) {
-		(requestOptions.body as Record<string, unknown>).indexingPolicy = parsedIndexPolicy;
-	}
-
-	return requestOptions;
-}
-
-export async function validateFields(
-	this: IExecuteSingleFunctions,
-	requestOptions: IHttpRequestOptions,
-): Promise<IHttpRequestOptions> {
-	const additionalFields = this.getNodeParameter('additionalFields', {}) as IDataObject;
-	const indexingPolicy = additionalFields.indexingPolicy;
-	const manualThroughput = additionalFields.offerThroughput;
-	const autoscaleThroughput = additionalFields.maxThroughput;
-
-	if (manualThroughput && autoscaleThroughput) {
-		throw new ApplicationError(
-			'You cannot set both "Max RU/s (Autoscale)" and "Max RU/s (Manual Throughput)". Please choose only one.',
-		);
-	}
-	if (autoscaleThroughput && requestOptions?.qs) {
-		requestOptions.qs['x-ms-cosmos-offer-autopilot-settings'] = {
-			maxThroughput: autoscaleThroughput,
-		};
-	}
-
-	if (!indexingPolicy || Object.keys(indexingPolicy).length === 0) {
-		throw new ApplicationError(
-			'Invalid Indexing Policy: Please provide a valid indexingPolicy JSON.',
-		);
-	}
-
-	return requestOptions;
-}
-
-export async function processResponseItems(
-	this: IExecuteSingleFunctions,
-	items: INodeExecutionData[],
-	response: IN8nHttpFullResponse,
-): Promise<any> {
-	if (!response || typeof response !== 'object' || !Array.isArray(items)) {
-		throw new ApplicationError('Invalid response format from Cosmos DB.');
-	}
-
-	const extractedDocuments: IDataObject[] = items.flatMap((item) => {
-		if (
-			item.json &&
-			typeof item.json === 'object' &&
-			'Documents' in item.json &&
-			Array.isArray(item.json.Documents)
-		) {
-			return item.json.Documents as IDataObject[];
-		}
-
-		return [];
-	});
-
-	return extractedDocuments;
-}
-
-export async function processResponseContainers(
-	this: IExecuteSingleFunctions,
-	items: INodeExecutionData[],
-	response: IN8nHttpFullResponse,
-): Promise<any> {
-	if (!response || typeof response !== 'object' || !Array.isArray(items)) {
-		throw new ApplicationError('Invalid response format from Cosmos DB.');
-	}
-
-	const data = response.body as { DocumentCollections: IDataObject[] };
-
-	if (data.DocumentCollections.length > 0) {
-		return data.DocumentCollections.map((doc) => ({ json: doc }));
-	}
-
-	return [];
-}
-
-function extractFieldPaths(obj: any, prefix = ''): string[] {
-	let paths: string[] = [];
-
-	Object.entries(obj).forEach(([key, value]) => {
-		if (key.startsWith('_') || key === 'id') {
-			return;
-		}
-		const newPath = prefix ? `${prefix}/${key}` : `/${key}`;
-		if (Array.isArray(value) && value.length > 0) {
-			value.forEach((item, index) => {
-				if (typeof item === 'object' && item !== null) {
-					paths = paths.concat(extractFieldPaths(item, `${newPath}/${index}`));
-				} else {
-					paths.push(`${newPath}/${index}`);
-				}
-			});
-		} else if (typeof value === 'object' && value !== null) {
-			paths = paths.concat(extractFieldPaths(value, newPath));
-		} else {
-			paths.push(newPath);
-		}
-	});
-
-	return paths;
-}
-
-export async function searchItemById(
-	this: ILoadOptionsFunctions,
-	itemId: string,
-): Promise<IDataObject | null> {
-	const collection = this.getNodeParameter('collId') as { mode: string; value: string };
-
-	if (!collection?.value) {
-		throw new ApplicationError('Collection ID is required.');
-	}
-
-	if (!itemId) {
-		throw new ApplicationError('Item ID is required.');
-	}
-
-	const opts: IHttpRequestOptions = {
-		method: 'GET',
-		url: `/colls/${collection.value}/docs/${itemId}`,
-		headers: {
-			'x-ms-documentdb-partitionkey': `["${itemId}"]`,
-		},
-	};
-
-	const responseData: IDataObject = await microsoftCosmosDbRequest.call(this, opts);
-
-	if (!responseData) {
-		return null;
-	}
-
-	return responseData;
-}
-
-export async function getDynamicFields(
-	this: ILoadOptionsFunctions,
-): Promise<INodeListSearchResult> {
-	const itemId = this.getNodeParameter('id', '') as { mode: string; value: string };
-
-	if (!itemId) {
-		throw new ApplicationError('Item ID is required to fetch fields.');
-	}
-
-	const itemData = await searchItemById.call(this, itemId.value);
-
-	if (!itemData) {
-		throw new ApplicationError(`Item with ID "${itemId.value}" not found.`);
-	}
-
-	const fieldPaths = extractFieldPaths(itemData);
-
-	return {
-		results: fieldPaths.map((path) => ({
-			name: path,
-			value: path,
-		})),
-	};
-}
-
 export async function fetchPartitionKeyField(
 	this: ILoadOptionsFunctions,
 ): Promise<INodeListSearchResult> {
 	const collection = this.getNodeParameter('collId', '') as { mode: string; value: string };
 
 	if (!collection?.value) {
-		throw new ApplicationError('Collection ID is required to determine the partition key.');
+		throw new NodeApiError(
+			this.getNode(),
+			{},
+			{
+				message: 'Container is required to determine the partition key.',
+				description: 'Please provide a value for "Container" field',
+			},
+		);
 	}
 
 	const opts: IHttpRequestOptions = {
@@ -684,6 +182,54 @@ export async function fetchPartitionKeyField(
 			},
 		],
 	};
+}
+
+export async function validateQueryParameters(
+	this: IExecuteSingleFunctions,
+	requestOptions: IHttpRequestOptions,
+): Promise<IHttpRequestOptions> {
+	const params = this.getNodeParameter('parameters', {}) as {
+		parameters: Array<{ name: string; value: string }>;
+	};
+
+	if (!params || !Array.isArray(params.parameters)) {
+		throw new NodeApiError(
+			this.getNode(),
+			{},
+			{
+				message: 'The "parameters" field cannot be empty',
+				description: 'Please provide at least one parameter',
+			},
+		);
+	}
+
+	const parameters = params.parameters;
+
+	for (const parameter of parameters) {
+		if (!parameter.name || parameter.name.trim() === '') {
+			throw new NodeApiError(
+				this.getNode(),
+				{},
+				{
+					message: 'Each parameter must have a non-empty "Name".',
+					description: 'Please provide a value for "Name" field',
+				},
+			);
+		}
+
+		if (!parameter.value) {
+			throw new NodeApiError(
+				this.getNode(),
+				{},
+				{
+					message: `Invalid value for parameter "${parameter.name}"`,
+					description: 'Please provide a value for "value" field',
+				},
+			);
+		}
+	}
+
+	return requestOptions;
 }
 
 export async function validatePartitionKey(
@@ -795,4 +341,580 @@ export async function validatePartitionKey(
 	};
 
 	return requestOptions;
+}
+
+export async function validateOperations(
+	this: IExecuteSingleFunctions,
+	requestOptions: IHttpRequestOptions,
+): Promise<IHttpRequestOptions> {
+	const rawOperations = this.getNodeParameter('operations', []) as IDataObject;
+
+	if (!rawOperations || !Array.isArray(rawOperations.operations)) {
+		throw new NodeApiError(
+			this.getNode(),
+			{},
+			{
+				message: 'No operation provided',
+				description: 'The "Operations" field must contain at least one operation.',
+			},
+		);
+	}
+
+	const operations = rawOperations.operations as Array<{
+		op: string;
+		path?: { mode: string; value: string };
+		toPath?: { mode: string; value: string };
+		from?: { mode: string; value: string };
+		value?: string | number;
+	}>;
+
+	const transformedOperations = operations.map((operation) => {
+		if (
+			operation.op !== 'move' &&
+			(!operation.path?.value ||
+				typeof operation.path.value !== 'string' ||
+				operation.path.value.trim() === '')
+		) {
+			throw new NodeApiError(
+				this.getNode(),
+				{},
+				{
+					message: 'Each operation must have a valid "path".',
+					description: 'Please provide a value for path',
+				},
+			);
+		}
+
+		if (
+			['set', 'replace', 'add', 'incr'].includes(operation.op) &&
+			(operation.value === undefined || operation.value === null)
+		) {
+			throw new NodeApiError(
+				this.getNode(),
+				{},
+				{
+					message: 'Invalid value',
+					description: `The "${operation.op}" operation must include a valid "value".`,
+				},
+			);
+		}
+
+		if (operation.op === 'move') {
+			if (
+				!operation.from?.value ||
+				typeof operation.from.value !== 'string' ||
+				operation.from.value.trim() === ''
+			) {
+				throw new NodeApiError(
+					this.getNode(),
+					{},
+					{
+						message: 'The "move" operation must have a valid path.',
+						description: 'Please provide a valid value for field "From Path"',
+					},
+				);
+			}
+
+			if (
+				!operation.toPath?.value ||
+				typeof operation.toPath.value !== 'string' ||
+				operation.toPath.value.trim() === ''
+			) {
+				throw new NodeApiError(
+					this.getNode(),
+					{},
+					{
+						message: 'The "move" operation must have a valid path.',
+						description: 'Please provide a valid value for field "To Path"',
+					},
+				);
+			}
+		}
+
+		if (operation.op === 'incr' && isNaN(Number(operation.value))) {
+			throw new NodeApiError(
+				this.getNode(),
+				{},
+				{
+					message: 'Invalid value',
+					description: 'Please provide a numeric value for field "Value"',
+				},
+			);
+		}
+
+		//To-Do-check to not send properties it doesn't need
+		return {
+			op: operation.op,
+			path: operation.op === 'move' ? operation.toPath?.value : operation.path?.value,
+			...(operation.from ? { from: operation.from.value } : {}),
+			...(operation.op === 'incr'
+				? { value: Number(operation.value) }
+				: { value: isNaN(Number(operation.value)) ? operation.value : Number(operation.value) }),
+		};
+	});
+
+	requestOptions.body = transformedOperations;
+
+	return requestOptions;
+}
+
+export async function validateFields(
+	this: IExecuteSingleFunctions,
+	requestOptions: IHttpRequestOptions,
+): Promise<IHttpRequestOptions> {
+	const additionalFields = this.getNodeParameter('additionalFields', {}) as IDataObject;
+	const indexingPolicy = additionalFields.indexingPolicy;
+	const manualThroughput = additionalFields.offerThroughput;
+	const autoscaleThroughput = additionalFields.maxThroughput;
+
+	if (manualThroughput && autoscaleThroughput) {
+		throw new NodeApiError(
+			this.getNode(),
+			{},
+			{
+				message: 'Bad parameter',
+				description:
+					'Please choose only one of Max RU/s (Autoscale) and Max RU/s (Manual Throughput)',
+			},
+		);
+	}
+	if (autoscaleThroughput && requestOptions?.qs) {
+		requestOptions.qs['x-ms-cosmos-offer-autopilot-settings'] = {
+			maxThroughput: autoscaleThroughput,
+		};
+	}
+
+	if (!indexingPolicy || Object.keys(indexingPolicy).length === 0) {
+		throw new NodeApiError(
+			this.getNode(),
+			{},
+			{
+				message: 'Invalid Indexing Policy',
+				description: 'Please provide a valid indexingPolicy JSON.',
+			},
+		);
+	}
+
+	return requestOptions;
+}
+
+//WIP
+export async function handlePagination(
+	this: IExecutePaginationFunctions,
+	resultOptions: DeclarativeRestApiSettings.ResultOptions,
+): Promise<INodeExecutionData[]> {
+	const aggregatedResult: IDataObject[] = [];
+	let nextPageToken: string | undefined;
+	const returnAll = this.getNodeParameter('returnAll') as boolean;
+	let limit = 60;
+
+	if (!returnAll) {
+		limit = this.getNodeParameter('limit') as number;
+		resultOptions.maxResults = limit;
+	}
+
+	resultOptions.paginate = true;
+
+	do {
+		if (nextPageToken) {
+			resultOptions.options.headers = resultOptions.options.headers ?? {};
+			resultOptions.options.headers['x-ms-continuation'] = nextPageToken;
+		}
+
+		const responseData = await this.makeRoutingRequest(resultOptions);
+
+		if (Array.isArray(responseData)) {
+			for (const responsePage of responseData) {
+				aggregatedResult.push(responsePage);
+
+				if (!returnAll && aggregatedResult.length >= limit) {
+					return aggregatedResult.slice(0, limit).map((result) => ({ json: result }));
+				}
+			}
+		}
+
+		//TO-DO-check-if-works
+		if (responseData.length > 0) {
+			const lastItem = responseData[responseData.length - 1];
+
+			if ('headers' in lastItem) {
+				const headers = (lastItem as unknown as { headers: { [key: string]: string } }).headers;
+
+				if (headers) {
+					nextPageToken = headers['x-ms-continuation'] as string | undefined;
+				}
+			}
+		}
+
+		if (!nextPageToken) {
+			break;
+		}
+	} while (nextPageToken);
+
+	return aggregatedResult.map((result) => ({ json: result }));
+}
+
+//WIP
+export async function handleErrorPostReceive(
+	this: IExecuteSingleFunctions,
+	data: INodeExecutionData[],
+	response: IN8nHttpFullResponse,
+): Promise<INodeExecutionData[]> {
+	console.log('Status code❌', response.statusCode);
+
+	if (String(response.statusCode).startsWith('4') || String(response.statusCode).startsWith('5')) {
+		const responseBody = response.body as IDataObject;
+		console.log('Got here ❌', responseBody);
+		let errorMessage = 'Unknown error occurred';
+
+		if (typeof responseBody.message === 'string') {
+			try {
+				const jsonMatch = responseBody.message.match(/Message: (\{.*\})/);
+
+				if (jsonMatch && jsonMatch[1]) {
+					const parsedMessage = JSON.parse(jsonMatch[1]);
+
+					if (
+						parsedMessage.Errors &&
+						Array.isArray(parsedMessage.Errors) &&
+						parsedMessage.Errors.length > 0
+					) {
+						errorMessage = parsedMessage.Errors[0].split(' Learn more:')[0].trim();
+					}
+				}
+			} catch (error) {
+				errorMessage = 'Failed to extract error message';
+			}
+		}
+
+		throw new ApplicationError(errorMessage);
+	}
+	return data;
+}
+
+export async function searchContainers(
+	this: ILoadOptionsFunctions,
+	filter?: string,
+): Promise<INodeListSearchResult> {
+	const opts: IHttpRequestOptions = {
+		method: 'GET',
+		url: '/colls',
+	};
+
+	const responseData: IDataObject = await microsoftCosmosDbRequest.call(this, opts);
+
+	const responseBody = responseData as {
+		DocumentCollections: IDataObject[];
+	};
+	const collections = responseBody.DocumentCollections;
+
+	if (!collections) {
+		return { results: [] };
+	}
+
+	const results: INodeListSearchItems[] = collections
+		.map((collection) => {
+			return {
+				name: String(collection.id),
+				value: String(collection.id),
+			};
+		})
+		.filter((collection) => !filter || collection.name.includes(filter))
+		.sort((a, b) => a.name.localeCompare(b.name));
+
+	return {
+		results,
+	};
+}
+
+export async function searchItems(
+	this: ILoadOptionsFunctions,
+	filter?: string,
+): Promise<INodeListSearchResult> {
+	const collection = this.getNodeParameter('collId') as { mode: string; value: string };
+
+	if (!collection?.value) {
+		throw new NodeApiError(
+			this.getNode(),
+			{},
+			{
+				message: 'Container is required',
+				description: 'Please provide a value for container in "Container" field',
+			},
+		);
+	}
+	const opts: IHttpRequestOptions = {
+		method: 'GET',
+		url: `/colls/${collection.value}/docs`,
+	};
+
+	const responseData: IDataObject = await microsoftCosmosDbRequest.call(this, opts);
+
+	const responseBody = responseData as {
+		Documents: IDataObject[];
+	};
+	const items = responseBody.Documents;
+
+	if (!items) {
+		return { results: [] };
+	}
+
+	const results: INodeListSearchItems[] = items
+		.map((item) => {
+			const idWithoutSpaces = String(item.id).replace(/ /g, '');
+			return {
+				name: String(idWithoutSpaces),
+				value: String(item.id),
+			};
+		})
+		.filter((item) => !filter || item.name.includes(filter))
+		.sort((a, b) => a.name.localeCompare(b.name));
+
+	return {
+		results,
+	};
+}
+
+function extractFieldPaths(obj: any, prefix = ''): string[] {
+	let paths: string[] = [];
+
+	Object.entries(obj).forEach(([key, value]) => {
+		if (key.startsWith('_') || key === 'id') {
+			return;
+		}
+		const newPath = prefix ? `${prefix}/${key}` : `/${key}`;
+		if (Array.isArray(value) && value.length > 0) {
+			value.forEach((item, index) => {
+				if (typeof item === 'object' && item !== null) {
+					paths = paths.concat(extractFieldPaths(item, `${newPath}/${index}`));
+				} else {
+					paths.push(`${newPath}/${index}`);
+				}
+			});
+		} else if (typeof value === 'object' && value !== null) {
+			paths = paths.concat(extractFieldPaths(value, newPath));
+		} else {
+			paths.push(newPath);
+		}
+	});
+
+	return paths;
+}
+
+export async function searchItemById(
+	this: ILoadOptionsFunctions,
+	itemId: string,
+): Promise<IDataObject | null> {
+	const collection = this.getNodeParameter('collId') as { mode: string; value: string };
+
+	if (!collection?.value) {
+		throw new NodeApiError(
+			this.getNode(),
+			{},
+			{
+				message: 'Container is required',
+				description: 'Please provide a value for container in "Container" field',
+			},
+		);
+	}
+
+	if (!itemId) {
+		throw new NodeApiError(
+			this.getNode(),
+			{},
+			{
+				message: 'Item is required',
+				description: 'Please provide a value for item in "Item" field',
+			},
+		);
+	}
+
+	const opts: IHttpRequestOptions = {
+		method: 'GET',
+		url: `/colls/${collection.value}/docs/${itemId}`,
+		headers: {
+			'x-ms-documentdb-partitionkey': `["${itemId}"]`,
+		},
+	};
+
+	const responseData: IDataObject = await microsoftCosmosDbRequest.call(this, opts);
+
+	if (!responseData) {
+		return null;
+	}
+
+	return responseData;
+}
+
+export async function getProperties(this: ILoadOptionsFunctions): Promise<INodeListSearchResult> {
+	const itemId = this.getNodeParameter('id', '') as { mode: string; value: string };
+
+	if (!itemId) {
+		throw new NodeApiError(
+			this.getNode(),
+			{},
+			{
+				message: 'Item is required',
+				description: 'Please provide a value for item in "Item" field',
+			},
+		);
+	}
+
+	const itemData = await searchItemById.call(this, itemId.value);
+
+	if (!itemData) {
+		throw new NodeApiError(
+			this.getNode(),
+			{},
+			{
+				message: 'Item not found',
+				description: `Item with ID "${itemId.value}" not found.`,
+			},
+		);
+	}
+
+	const fieldPaths = extractFieldPaths(itemData);
+
+	return {
+		results: fieldPaths.map((path) => ({
+			name: path,
+			value: path,
+		})),
+	};
+}
+
+export async function formatCustomProperties(
+	this: IExecuteSingleFunctions,
+	requestOptions: IHttpRequestOptions,
+): Promise<IHttpRequestOptions> {
+	const rawCustomProperties = this.getNodeParameter('customProperties', '{}') as string;
+	const newId = this.getNodeParameter('newId') as string;
+
+	if (/\s/.test(newId)) {
+		throw new NodeApiError(
+			this.getNode(),
+			{},
+			{
+				message: 'Invalid ID format: IDs cannot contain spaces.',
+				description: 'Use an underscore (_) or another separator instead.',
+			},
+		);
+	}
+
+	let parsedProperties: Record<string, unknown>;
+	try {
+		// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+		parsedProperties = JSON.parse(rawCustomProperties);
+	} catch (error) {
+		throw new NodeApiError(
+			this.getNode(),
+			{},
+			{
+				message: 'Invalid format in "Custom Properties".',
+				description: ' Please provide a valid JSON object.',
+			},
+		);
+	}
+
+	if (
+		!requestOptions.body ||
+		typeof requestOptions.body !== 'object' ||
+		requestOptions.body === null
+	) {
+		requestOptions.body = {};
+	}
+
+	Object.assign(requestOptions.body as Record<string, unknown>, { id: newId }, parsedProperties);
+
+	return requestOptions;
+}
+
+export async function formatJSONFields(
+	this: IExecuteSingleFunctions,
+	requestOptions: IHttpRequestOptions,
+): Promise<IHttpRequestOptions> {
+	const rawPartitionKey = this.getNodeParameter('partitionKey', '{}') as string;
+	const additionalFields = this.getNodeParameter('additionalFields', {}) as IDataObject;
+	const indexingPolicy = additionalFields.indexingPolicy as string;
+
+	let parsedPartitionKey: Record<string, unknown>;
+	let parsedIndexPolicy: Record<string, unknown> | undefined;
+
+	try {
+		// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+		parsedPartitionKey = JSON.parse(rawPartitionKey);
+
+		if (indexingPolicy) {
+			// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+			parsedIndexPolicy = JSON.parse(indexingPolicy);
+		}
+	} catch (error) {
+		throw new NodeApiError(
+			this.getNode(),
+			{},
+			{
+				message: 'Invalid JSON format in either "Partition Key" or "Indexing Policy".',
+				description: 'Please provide valid JSON objects.',
+			},
+		);
+	}
+
+	if (
+		!requestOptions.body ||
+		typeof requestOptions.body !== 'object' ||
+		requestOptions.body === null
+	) {
+		requestOptions.body = {};
+	}
+
+	(requestOptions.body as Record<string, unknown>).partitionKey = parsedPartitionKey;
+
+	if (parsedIndexPolicy) {
+		(requestOptions.body as Record<string, unknown>).indexingPolicy = parsedIndexPolicy;
+	}
+
+	return requestOptions;
+}
+
+export async function processResponseItems(
+	this: IExecuteSingleFunctions,
+	items: INodeExecutionData[],
+	response: IN8nHttpFullResponse,
+): Promise<any> {
+	if (!response || typeof response !== 'object' || !Array.isArray(items)) {
+		throw new ApplicationError('Invalid response format from Cosmos DB.');
+	}
+
+	const extractedDocuments: IDataObject[] = items.flatMap((item) => {
+		if (
+			item.json &&
+			typeof item.json === 'object' &&
+			'Documents' in item.json &&
+			Array.isArray(item.json.Documents)
+		) {
+			return item.json.Documents as IDataObject[];
+		}
+
+		return [];
+	});
+
+	return extractedDocuments;
+}
+
+export async function processResponseContainers(
+	this: IExecuteSingleFunctions,
+	items: INodeExecutionData[],
+	response: IN8nHttpFullResponse,
+): Promise<any> {
+	if (!response || typeof response !== 'object' || !Array.isArray(items)) {
+		throw new ApplicationError('Invalid response format from Cosmos DB.');
+	}
+
+	const data = response.body as { DocumentCollections: IDataObject[] };
+
+	if (data.DocumentCollections.length > 0) {
+		return data.DocumentCollections.map((doc) => ({ json: doc }));
+	}
+
+	return [];
 }

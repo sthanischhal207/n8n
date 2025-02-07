@@ -1,8 +1,8 @@
 import type { ILoadOptionsFunctions } from 'n8n-workflow';
 
-import { searchCollections } from '../GenericFunctions';
+import { searchContainers } from '../GenericFunctions';
 
-describe('GenericFunctions - searchCollections', () => {
+describe('GenericFunctions - searchContainers', () => {
 	const mockRequestWithAuthentication = jest.fn();
 
 	const mockContext = {
@@ -17,7 +17,7 @@ describe('GenericFunctions - searchCollections', () => {
 		jest.clearAllMocks();
 	});
 
-	it('should make a GET request to fetch collections and return results', async () => {
+	it('should make a GET request to fetch containers and return results', async () => {
 		(mockContext.getCredentials as jest.Mock).mockResolvedValueOnce({
 			account: 'us-east-1',
 			database: 'first_database_1',
@@ -28,7 +28,7 @@ describe('GenericFunctions - searchCollections', () => {
 			DocumentCollections: [{ id: 'Collection1' }, { id: 'Collection2' }],
 		});
 
-		const response = await searchCollections.call(mockContext);
+		const response = await searchContainers.call(mockContext);
 
 		expect(mockRequestWithAuthentication).toHaveBeenCalledWith(
 			'microsoftCosmosDbSharedKeyApi',
@@ -52,7 +52,7 @@ describe('GenericFunctions - searchCollections', () => {
 		});
 	});
 
-	it('should filter collections by the provided filter string', async () => {
+	it('should filter containers by the provided filter string', async () => {
 		(mockContext.getCredentials as jest.Mock).mockResolvedValueOnce({
 			account: 'us-east-1',
 			database: 'first_database_1',
@@ -63,7 +63,7 @@ describe('GenericFunctions - searchCollections', () => {
 			DocumentCollections: [{ id: 'Test-Col-1' }, { id: 'Prod-Col-1' }],
 		});
 
-		const response = await searchCollections.call(mockContext, 'Test');
+		const response = await searchContainers.call(mockContext, 'Test');
 
 		expect(mockRequestWithAuthentication).toHaveBeenCalledWith(
 			'microsoftCosmosDbSharedKeyApi',
@@ -84,7 +84,7 @@ describe('GenericFunctions - searchCollections', () => {
 		});
 	});
 
-	it('should sort collections alphabetically by name', async () => {
+	it('should sort containers alphabetically by name', async () => {
 		(mockContext.getCredentials as jest.Mock).mockResolvedValueOnce({ account: 'us-east-1' });
 		(mockContext.getNodeParameter as jest.Mock).mockReturnValueOnce('db-id-1');
 
@@ -92,7 +92,7 @@ describe('GenericFunctions - searchCollections', () => {
 			DocumentCollections: [{ id: 'z-col' }, { id: 'a-col' }, { id: 'm-col' }],
 		});
 
-		const response = await searchCollections.call(mockContext);
+		const response = await searchContainers.call(mockContext);
 
 		expect(response).toEqual({
 			results: [
@@ -103,7 +103,7 @@ describe('GenericFunctions - searchCollections', () => {
 		});
 	});
 
-	it('should handle empty results when no collections are returned', async () => {
+	it('should handle empty results when no containers are returned', async () => {
 		(mockContext.getCredentials as jest.Mock).mockResolvedValueOnce({ account: 'us-east-1' });
 		(mockContext.getNodeParameter as jest.Mock).mockReturnValueOnce('db-id-1');
 
@@ -111,19 +111,19 @@ describe('GenericFunctions - searchCollections', () => {
 			DocumentCollections: [],
 		});
 
-		const response = await searchCollections.call(mockContext);
+		const response = await searchContainers.call(mockContext);
 
 		expect(response).toEqual({ results: [] });
 	});
 
-	it('should handle missing Collections property', async () => {
+	it('should handle missing DocumentCollections property', async () => {
 		(mockContext.getCredentials as jest.Mock).mockResolvedValueOnce({ account: 'us-east-1' });
 		(mockContext.getNodeParameter as jest.Mock).mockReturnValueOnce('db-id-1');
 
 		mockRequestWithAuthentication.mockResolvedValueOnce({
 			unexpectedkey: 'value',
 		});
-		const response = await searchCollections.call(mockContext);
+		const response = await searchContainers.call(mockContext);
 
 		expect(response).toEqual({ results: [] });
 	});

@@ -116,9 +116,9 @@ describe('GenericFunctions - searchItems', () => {
 		expect(response).toEqual({ results: [] });
 	});
 
-	it('should throw an error when collection ID is missing', async () => {
+	it('should throw an error when container ID is missing', async () => {
 		(mockContext.getNodeParameter as jest.Mock).mockReturnValueOnce({ mode: 'list', value: '' });
 
-		await expect(searchItems.call(mockContext)).rejects.toThrow('Collection ID is required.');
+		await expect(searchItems.call(mockContext)).rejects.toThrow('Container is required');
 	});
 });

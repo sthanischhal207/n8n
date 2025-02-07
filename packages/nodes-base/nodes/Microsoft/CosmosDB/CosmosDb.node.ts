@@ -3,7 +3,7 @@ import { NodeConnectionType } from 'n8n-workflow';
 
 import { containerFields, containerOperations } from './descriptions/ContainerDescription';
 import { itemFields, itemOperations } from './descriptions/ItemDescription';
-import { getDynamicFields, searchCollections, searchItems } from './GenericFunctions';
+import { getProperties, searchContainers, searchItems } from './GenericFunctions';
 
 export class CosmosDb implements INodeType {
 	description: INodeTypeDescription = {
@@ -62,9 +62,9 @@ export class CosmosDb implements INodeType {
 
 	methods = {
 		listSearch: {
-			searchCollections,
+			searchContainers,
 			searchItems,
-			getDynamicFields,
+			getProperties,
 		},
 	};
 }

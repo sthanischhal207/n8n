@@ -182,7 +182,7 @@ export const createFields: INodeProperties[] = [
 				name: 'list',
 				type: 'list',
 				typeOptions: {
-					searchListMethod: 'searchCollections',
+					searchListMethod: 'searchContainers',
 					searchable: true,
 				},
 			},
@@ -266,7 +266,7 @@ export const deleteFields: INodeProperties[] = [
 				name: 'list',
 				type: 'list',
 				typeOptions: {
-					searchListMethod: 'searchCollections',
+					searchListMethod: 'searchContainers',
 					searchable: true,
 				},
 			},
@@ -379,7 +379,7 @@ export const getFields: INodeProperties[] = [
 				name: 'list',
 				type: 'list',
 				typeOptions: {
-					searchListMethod: 'searchCollections',
+					searchListMethod: 'searchContainers',
 					searchable: true,
 				},
 			},
@@ -492,7 +492,7 @@ export const getAllFields: INodeProperties[] = [
 				name: 'list',
 				type: 'list',
 				typeOptions: {
-					searchListMethod: 'searchCollections',
+					searchListMethod: 'searchContainers',
 					searchable: true,
 				},
 			},
@@ -577,7 +577,7 @@ export const queryFields: INodeProperties[] = [
 				name: 'list',
 				type: 'list',
 				typeOptions: {
-					searchListMethod: 'searchCollections',
+					searchListMethod: 'searchContainers',
 					searchable: true,
 				},
 			},
@@ -692,7 +692,7 @@ export const updateFields: INodeProperties[] = [
 				name: 'list',
 				type: 'list',
 				typeOptions: {
-					searchListMethod: 'searchCollections',
+					searchListMethod: 'searchContainers',
 					searchable: true,
 				},
 			},
@@ -814,7 +814,7 @@ export const updateFields: INodeProperties[] = [
 								name: 'list',
 								type: 'list',
 								typeOptions: {
-									searchListMethod: 'getDynamicFields',
+									searchListMethod: 'getProperties',
 									searchable: true,
 								},
 							},
@@ -847,7 +847,7 @@ export const updateFields: INodeProperties[] = [
 								name: 'list',
 								type: 'list',
 								typeOptions: {
-									searchListMethod: 'getDynamicFields',
+									searchListMethod: 'getProperties',
 									searchable: true,
 								},
 							},
@@ -880,7 +880,7 @@ export const updateFields: INodeProperties[] = [
 								name: 'list',
 								type: 'list',
 								typeOptions: {
-									searchListMethod: 'getDynamicFields',
+									searchListMethod: 'getProperties',
 									searchable: true,
 								},
 							},

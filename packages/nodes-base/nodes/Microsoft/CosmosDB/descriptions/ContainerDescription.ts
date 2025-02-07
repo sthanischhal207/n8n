@@ -199,7 +199,7 @@ export const getFields: INodeProperties[] = [
 				name: 'list',
 				type: 'list',
 				typeOptions: {
-					searchListMethod: 'searchCollections',
+					searchListMethod: 'searchContainers',
 					searchable: true,
 				},
 			},
@@ -248,7 +248,7 @@ export const deleteFields: INodeProperties[] = [
 				name: 'list',
 				type: 'list',
 				typeOptions: {
-					searchListMethod: 'searchCollections',
+					searchListMethod: 'searchContainers',
 					searchable: true,
 				},
 			},
