@@ -15,6 +15,7 @@ describe('GenericFunctions - searchItems', () => {
 
 	beforeEach(() => {
 		jest.clearAllMocks();
+		mockContext.getNode = jest.fn().mockReturnValue({});
 	});
 
 	it('should fetch documents and return formatted results', async () => {
@@ -45,7 +46,7 @@ describe('GenericFunctions - searchItems', () => {
 
 		expect(response).toEqual({
 			results: [
-				{ name: 'Item1', value: 'Item 1' }, // Space removed from 'Item 1'
+				{ name: 'Item1', value: 'Item 1' },
 				{ name: 'Item2', value: 'Item 2' },
 			],
 		});
@@ -119,6 +120,11 @@ describe('GenericFunctions - searchItems', () => {
 	it('should throw an error when container ID is missing', async () => {
 		(mockContext.getNodeParameter as jest.Mock).mockReturnValueOnce({ mode: 'list', value: '' });
 
-		await expect(searchItems.call(mockContext)).rejects.toThrow('Container is required');
+		await expect(searchItems.call(mockContext)).rejects.toThrowError(
+			// eslint-disable-next-line @typescript-eslint/no-unsafe-argument
+			expect.objectContaining({
+				message: 'Container is required',
+			}),
+		);
 	});
 });

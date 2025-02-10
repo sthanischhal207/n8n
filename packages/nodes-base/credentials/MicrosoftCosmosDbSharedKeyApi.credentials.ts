@@ -75,15 +75,22 @@ export class MicrosoftCosmosDbSharedKeyApi implements ICredentialType {
 			requestOptions.headers['x-ms-session-token'] = credentials.sessionToken;
 		}
 
-		// const url = new URL (requestOptions.uri);
+		let url;
 
-		const url = new URL(requestOptions.baseURL + requestOptions.url);
-		const pathSegments = url.pathname.split('/').filter((segment) => segment);
+		if (requestOptions.url) {
+			url = new URL(requestOptions.baseURL + requestOptions.url);
+			//@ts-ignore
+		} else if (requestOptions.uri) {
+			//@ts-ignore
+			url = new URL(requestOptions.uri);
+		}
+
+		const pathSegments = url?.pathname.split('/').filter((segment) => segment);
 
 		let resourceType = '';
 		let resourceId = '';
 
-		if (pathSegments.includes('docs')) {
+		if (pathSegments?.includes('docs')) {
 			const docsIndex = pathSegments.lastIndexOf('docs');
 			resourceType = 'docs';
 			if (pathSegments[docsIndex + 1]) {
@@ -92,7 +99,7 @@ export class MicrosoftCosmosDbSharedKeyApi implements ICredentialType {
 			} else {
 				resourceId = pathSegments.slice(0, docsIndex).join('/');
 			}
-		} else if (pathSegments.includes('colls')) {
+		} else if (pathSegments?.includes('colls')) {
 			const collsIndex = pathSegments.lastIndexOf('colls');
 			resourceType = 'colls';
 			if (pathSegments[collsIndex + 1]) {
@@ -101,7 +108,7 @@ export class MicrosoftCosmosDbSharedKeyApi implements ICredentialType {
 			} else {
 				resourceId = pathSegments.slice(0, collsIndex).join('/');
 			}
-		} else if (pathSegments.includes('dbs')) {
+		} else if (pathSegments?.includes('dbs')) {
 			const dbsIndex = pathSegments.lastIndexOf('dbs');
 			resourceType = 'dbs';
 			resourceId = pathSegments.slice(0, dbsIndex + 2).join('/');

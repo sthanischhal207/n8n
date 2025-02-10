@@ -1,3 +1,7 @@
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
+/* eslint-disable @typescript-eslint/no-unsafe-argument */
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
+// eslint-disable-next-line @typescript-eslint/no-unsafe-argument
 import * as crypto from 'crypto';
 import type {
 	DeclarativeRestApiSettings,
@@ -71,6 +75,7 @@ export async function microsoftCosmosDbRequest(
 
 	const requestOptions: IHttpRequestOptions = {
 		...opts,
+		// eslint-disable-next-line @typescript-eslint/no-base-to-string, @typescript-eslint/restrict-template-expressions
 		baseURL: `${credentials.baseUrl}`,
 		headers: {
 			...opts.headers,
@@ -99,8 +104,6 @@ export async function microsoftCosmosDbRequest(
 	};
 
 	try {
-		console.log('Final Request Options before Request:', requestOptions);
-
 		return (await this.helpers.requestWithAuthentication.call(
 			this,
 			'microsoftCosmosDbSharedKeyApi',
@@ -442,14 +445,15 @@ export async function validateOperations(
 			);
 		}
 
-		//To-Do-check to not send properties it doesn't need
 		return {
 			op: operation.op,
 			path: operation.op === 'move' ? operation.toPath?.value : operation.path?.value,
 			...(operation.from ? { from: operation.from.value } : {}),
 			...(operation.op === 'incr'
 				? { value: Number(operation.value) }
-				: { value: isNaN(Number(operation.value)) ? operation.value : Number(operation.value) }),
+				: operation.value !== undefined
+					? { value: isNaN(Number(operation.value)) ? operation.value : Number(operation.value) }
+					: {}),
 		};
 	});
 
@@ -458,12 +462,11 @@ export async function validateOperations(
 	return requestOptions;
 }
 
-export async function validateFields(
+export async function validateContainerFields(
 	this: IExecuteSingleFunctions,
 	requestOptions: IHttpRequestOptions,
 ): Promise<IHttpRequestOptions> {
 	const additionalFields = this.getNodeParameter('additionalFields', {}) as IDataObject;
-	const indexingPolicy = additionalFields.indexingPolicy;
 	const manualThroughput = additionalFields.offerThroughput;
 	const autoscaleThroughput = additionalFields.maxThroughput;
 
@@ -473,32 +476,28 @@ export async function validateFields(
 			{},
 			{
 				message: 'Bad parameter',
-				description:
-					'Please choose only one of Max RU/s (Autoscale) and Max RU/s (Manual Throughput)',
+				description: 'Please choose only one of Max RU/s (Autoscale) and Manual Throughput RU/s',
 			},
 		);
 	}
-	if (autoscaleThroughput && requestOptions?.qs) {
-		requestOptions.qs['x-ms-cosmos-offer-autopilot-settings'] = {
-			maxThroughput: autoscaleThroughput,
+
+	if (autoscaleThroughput) {
+		requestOptions.headers = {
+			...requestOptions.headers,
+			'x-ms-cosmos-offer-autopilot-setting': { maxThroughput: autoscaleThroughput },
 		};
 	}
 
-	if (!indexingPolicy || Object.keys(indexingPolicy).length === 0) {
-		throw new NodeApiError(
-			this.getNode(),
-			{},
-			{
-				message: 'Invalid Indexing Policy',
-				description: 'Please provide a valid indexingPolicy JSON.',
-			},
-		);
+	if (manualThroughput) {
+		requestOptions.headers = {
+			...requestOptions.headers,
+			'x-ms-offer-throughput': manualThroughput,
+		};
 	}
 
 	return requestOptions;
 }
 
-//WIP
 export async function handlePagination(
 	this: IExecutePaginationFunctions,
 	resultOptions: DeclarativeRestApiSettings.ResultOptions,
@@ -533,7 +532,6 @@ export async function handlePagination(
 			}
 		}
 
-		//TO-DO-check-if-works
 		if (responseData.length > 0) {
 			const lastItem = responseData[responseData.length - 1];
 
@@ -554,40 +552,34 @@ export async function handlePagination(
 	return aggregatedResult.map((result) => ({ json: result }));
 }
 
-//WIP
 export async function handleErrorPostReceive(
 	this: IExecuteSingleFunctions,
 	data: INodeExecutionData[],
 	response: IN8nHttpFullResponse,
 ): Promise<INodeExecutionData[]> {
-	console.log('Status code❌', response.statusCode);
-
 	if (String(response.statusCode).startsWith('4') || String(response.statusCode).startsWith('5')) {
 		const responseBody = response.body as IDataObject;
-		console.log('Got here ❌', responseBody);
+
 		let errorMessage = 'Unknown error occurred';
+		let errorDescription = 'An unexpected error was encountered.';
 
-		if (typeof responseBody.message === 'string') {
-			try {
-				const jsonMatch = responseBody.message.match(/Message: (\{.*\})/);
-
-				if (jsonMatch && jsonMatch[1]) {
-					const parsedMessage = JSON.parse(jsonMatch[1]);
-
-					if (
-						parsedMessage.Errors &&
-						Array.isArray(parsedMessage.Errors) &&
-						parsedMessage.Errors.length > 0
-					) {
-						errorMessage = parsedMessage.Errors[0].split(' Learn more:')[0].trim();
-					}
-				}
-			} catch (error) {
-				errorMessage = 'Failed to extract error message';
+		if (typeof responseBody === 'object' && responseBody !== null) {
+			if (typeof responseBody.code === 'string') {
+				errorMessage = responseBody.code;
+			}
+			if (typeof responseBody.message === 'string') {
+				errorDescription = responseBody.message;
 			}
 		}
 
-		throw new ApplicationError(errorMessage);
+		throw new NodeApiError(
+			this.getNode(),
+			{},
+			{
+				message: errorMessage,
+				description: errorDescription,
+			},
+		);
 	}
 	return data;
 }
@@ -675,7 +667,7 @@ export async function searchItems(
 	};
 }
 
-function extractFieldPaths(obj: any, prefix = ''): string[] {
+function extractFieldPaths(obj: IDataObject, prefix = ''): string[] {
 	let paths: string[] = [];
 
 	Object.entries(obj).forEach(([key, value]) => {
@@ -692,7 +684,7 @@ function extractFieldPaths(obj: any, prefix = ''): string[] {
 				}
 			});
 		} else if (typeof value === 'object' && value !== null) {
-			paths = paths.concat(extractFieldPaths(value, newPath));
+			paths = paths.concat(extractFieldPaths(value as IDataObject, newPath));
 		} else {
 			paths.push(newPath);
 		}
@@ -783,6 +775,34 @@ export async function getProperties(this: ILoadOptionsFunctions): Promise<INodeL
 	};
 }
 
+export async function presendLimitField(
+	this: IExecuteSingleFunctions,
+	requestOptions: IHttpRequestOptions,
+): Promise<IHttpRequestOptions> {
+	const returnAll = this.getNodeParameter('returnAll');
+	let limit;
+	if (!returnAll) {
+		limit = this.getNodeParameter('limit');
+		if (!limit) {
+			throw new NodeApiError(
+				this.getNode(),
+				{},
+				{
+					message: 'Limit value not found',
+					description:
+						' Please provide a value for "Limit" or  set "Return All" to true to return all results',
+				},
+			);
+		}
+	}
+	requestOptions.headers = {
+		...requestOptions.headers,
+		'x-ms-max-item-count': limit,
+	};
+
+	return requestOptions;
+}
+
 export async function formatCustomProperties(
 	this: IExecuteSingleFunctions,
 	requestOptions: IHttpRequestOptions,
@@ -803,7 +823,6 @@ export async function formatCustomProperties(
 
 	let parsedProperties: Record<string, unknown>;
 	try {
-		// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
 		parsedProperties = JSON.parse(rawCustomProperties);
 	} catch (error) {
 		throw new NodeApiError(
@@ -841,11 +860,9 @@ export async function formatJSONFields(
 	let parsedIndexPolicy: Record<string, unknown> | undefined;
 
 	try {
-		// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
 		parsedPartitionKey = JSON.parse(rawPartitionKey);
 
 		if (indexingPolicy) {
-			// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
 			parsedIndexPolicy = JSON.parse(indexingPolicy);
 		}
 	} catch (error) {
@@ -880,32 +897,32 @@ export async function processResponseItems(
 	this: IExecuteSingleFunctions,
 	items: INodeExecutionData[],
 	response: IN8nHttpFullResponse,
-): Promise<any> {
+): Promise<INodeExecutionData[]> {
 	if (!response || typeof response !== 'object' || !Array.isArray(items)) {
 		throw new ApplicationError('Invalid response format from Cosmos DB.');
 	}
 
-	const extractedDocuments: IDataObject[] = items.flatMap((item) => {
+	const extractedDocuments: INodeExecutionData[] = items.flatMap((item) => {
 		if (
 			item.json &&
 			typeof item.json === 'object' &&
 			'Documents' in item.json &&
 			Array.isArray(item.json.Documents)
 		) {
-			return item.json.Documents as IDataObject[];
+			return item.json.Documents.map((doc) => ({ json: doc }));
 		}
 
 		return [];
 	});
 
-	return extractedDocuments;
+	return extractedDocuments.length ? extractedDocuments : [{ json: {} }];
 }
 
 export async function processResponseContainers(
 	this: IExecuteSingleFunctions,
 	items: INodeExecutionData[],
 	response: IN8nHttpFullResponse,
-): Promise<any> {
+): Promise<INodeExecutionData[]> {
 	if (!response || typeof response !== 'object' || !Array.isArray(items)) {
 		throw new ApplicationError('Invalid response format from Cosmos DB.');
 	}

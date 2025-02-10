@@ -1,6 +1,11 @@
 import type { INodeProperties } from 'n8n-workflow';
 
-import { formatJSONFields, processResponseContainers, validateFields } from '../GenericFunctions';
+import {
+	formatJSONFields,
+	handleErrorPostReceive,
+	processResponseContainers,
+	validateContainerFields,
+} from '../GenericFunctions';
 
 export const containerOperations: INodeProperties[] = [
 	{
@@ -20,12 +25,15 @@ export const containerOperations: INodeProperties[] = [
 				description: 'Create a container',
 				routing: {
 					send: {
-						preSend: [formatJSONFields, validateFields],
+						preSend: [formatJSONFields, validateContainerFields],
 					},
 					request: {
 						ignoreHttpStatusErrors: true,
 						method: 'POST',
 						url: '/colls',
+					},
+					output: {
+						postReceive: [handleErrorPostReceive],
 					},
 				},
 				action: 'Create container',
@@ -42,6 +50,7 @@ export const containerOperations: INodeProperties[] = [
 					},
 					output: {
 						postReceive: [
+							handleErrorPostReceive,
 							{
 								type: 'set',
 								properties: {
@@ -63,6 +72,9 @@ export const containerOperations: INodeProperties[] = [
 						method: 'GET',
 						url: '=/colls/{{ $parameter["collId"] }}',
 					},
+					output: {
+						postReceive: [handleErrorPostReceive],
+					},
 				},
 				action: 'Get container',
 			},
@@ -77,7 +89,7 @@ export const containerOperations: INodeProperties[] = [
 						url: '/colls',
 					},
 					output: {
-						postReceive: [processResponseContainers],
+						postReceive: [handleErrorPostReceive, processResponseContainers],
 					},
 				},
 				action: 'Get many containers',
@@ -156,19 +168,15 @@ export const createFields: INodeProperties[] = [
 				description: 'The user specified autoscale max RU/s',
 			},
 			{
-				displayName: 'Max RU/s (for Manual Throughput)',
+				displayName: 'Manual Throughput RU/s',
 				name: 'offerThroughput',
 				type: 'number',
 				default: 400,
+				typeOptions: {
+					minValue: 400,
+				},
 				description:
 					'The user specified manual throughput (RU/s) for the collection expressed in units of 100 request units per second',
-				routing: {
-					send: {
-						type: 'query',
-						property: 'x-ms-offer-throughput',
-						value: '={{$value}}',
-					},
-				},
 			},
 		],
 		placeholder: 'Add Option',

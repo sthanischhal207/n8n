@@ -4,6 +4,7 @@ import {
 	formatCustomProperties,
 	handleErrorPostReceive,
 	handlePagination,
+	presendLimitField,
 	processResponseItems,
 	validateOperations,
 	validatePartitionKey,
@@ -97,6 +98,7 @@ export const itemOperations: INodeProperties[] = [
 				routing: {
 					send: {
 						paginate: true,
+						preSend: [presendLimitField],
 					},
 					operations: {
 						pagination: handlePagination,
@@ -128,7 +130,7 @@ export const itemOperations: INodeProperties[] = [
 						},
 					},
 					output: {
-						postReceive: [handleErrorPostReceive],
+						postReceive: [processResponseItems, handleErrorPostReceive],
 					},
 				},
 				action: 'Query items',
@@ -539,13 +541,6 @@ export const getAllFields: INodeProperties[] = [
 				returnAll: [false],
 			},
 		},
-		routing: {
-			send: {
-				property: 'x-ms-max-item-count',
-				type: 'query',
-				value: '={{ $value }}',
-			},
-		},
 		type: 'number',
 		typeOptions: {
 			minValue: 1,
@@ -611,7 +606,7 @@ export const queryFields: INodeProperties[] = [
 				operation: ['query'],
 			},
 		},
-		placeholder: 'SELECT * FROM c WHERE c.name = @name',
+		placeholder: 'SELECT * FROM c WHERE c.name = @Name',
 		routing: {
 			send: {
 				type: 'body',
