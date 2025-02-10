@@ -45,17 +45,12 @@ export function getAuthorizationTokenUsingMasterKey(
 	verb: string,
 	resourceType: string,
 	resourceId: string,
-	date: string,
 	masterKey: string,
 ): string {
-	const key = Buffer.from(masterKey, 'base64');
-	const payload =
-		`${verb.toLowerCase()}\n` +
-		`${resourceType.toLowerCase()}\n` +
-		`${resourceId}\n` +
-		`${date.toLowerCase()}\n` +
-		'\n';
+	const date = new Date().toUTCString().toLowerCase();
 
+	const key = Buffer.from(masterKey, 'base64');
+	const payload = `${verb.toLowerCase()}\n${resourceType.toLowerCase()}\n${resourceId}\n${date.toLowerCase()}\n\n`;
 	const hmacSha256 = crypto.createHmac('sha256', key);
 	const signature = hmacSha256.update(payload, 'utf8').digest('base64');
 

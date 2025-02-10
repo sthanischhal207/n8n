@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-argument */
 import {
 	ApplicationError,
 	type ICredentialDataDecryptedObject,
@@ -64,11 +65,13 @@ export class MicrosoftCosmosDbSharedKeyApi implements ICredentialType {
 		}
 
 		requestOptions.headers ??= {};
+
 		const date = new Date().toUTCString().toLowerCase();
 		requestOptions.headers = {
 			...requestOptions.headers,
 			'x-ms-date': date,
 			'x-ms-version': '2018-12-31',
+			'Cache-Control': 'no-cache',
 		};
 
 		if (credentials.sessionToken) {
@@ -76,7 +79,6 @@ export class MicrosoftCosmosDbSharedKeyApi implements ICredentialType {
 		}
 
 		let url;
-
 		if (requestOptions.url) {
 			url = new URL(requestOptions.baseURL + requestOptions.url);
 			//@ts-ignore
@@ -86,7 +88,6 @@ export class MicrosoftCosmosDbSharedKeyApi implements ICredentialType {
 		}
 
 		const pathSegments = url?.pathname.split('/').filter((segment) => segment);
-
 		let resourceType = '';
 		let resourceId = '';
 
@@ -116,22 +117,21 @@ export class MicrosoftCosmosDbSharedKeyApi implements ICredentialType {
 			throw new ApplicationError('Unable to determine resourceType and resourceId from the URL.');
 		}
 
-		console.log('resourceId', resourceId);
-		console.log('resourceType', resourceType);
-
 		if (requestOptions.method) {
-			const authToken = getAuthorizationTokenUsingMasterKey(
-				requestOptions.method,
-				resourceType,
-				resourceId,
-				date,
-				credentials.key as string,
-			);
+			let authToken = '';
 
-			requestOptions.headers[HeaderConstants.AUTHORIZATION] = authToken;
+			if (credentials.key) {
+				authToken = getAuthorizationTokenUsingMasterKey(
+					requestOptions.method,
+					resourceType,
+					resourceId,
+					credentials.key as string,
+				);
+			}
+
+			requestOptions.headers[HeaderConstants.AUTHORIZATION] = encodeURIComponent(authToken);
+			await new Promise((resolve) => setTimeout(resolve, 500));
 		}
-
-		console.log('Final requestOptions:', requestOptions);
 
 		return requestOptions;
 	}
