@@ -31,7 +31,7 @@ describe('GenericFunctions - searchContainers', () => {
 		const response = await searchContainers.call(mockContext);
 
 		expect(mockRequestWithAuthentication).toHaveBeenCalledWith(
-			'microsoftCosmosDbSharedKeyApi',
+			'microsoftAzureCosmosDbSharedKeyApi',
 			expect.objectContaining({
 				baseURL: 'https://us-east-1.documents.azure.com',
 				method: 'GET',
@@ -66,7 +66,7 @@ describe('GenericFunctions - searchContainers', () => {
 		const response = await searchContainers.call(mockContext, 'Test');
 
 		expect(mockRequestWithAuthentication).toHaveBeenCalledWith(
-			'microsoftCosmosDbSharedKeyApi',
+			'microsoftAzureCosmosDbSharedKeyApi',
 			expect.objectContaining({
 				baseURL: 'https://us-east-1.documents.azure.com',
 				method: 'GET',

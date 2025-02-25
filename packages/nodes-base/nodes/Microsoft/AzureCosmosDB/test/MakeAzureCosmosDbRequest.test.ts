@@ -1,9 +1,6 @@
-/* eslint-disable @typescript-eslint/no-unsafe-assignment */
-/* eslint-disable @typescript-eslint/no-unsafe-argument */
-/* eslint-disable @typescript-eslint/no-unsafe-member-access */
-import { microsoftCosmosDbRequest } from '../GenericFunctions';
+import { makeAzureCosmosDbRequest } from '../GenericFunctions';
 
-describe('GenericFunctions - microsoftCosmosDbRequest', () => {
+describe('GenericFunctions - makeAzureCosmosDbRequest', () => {
 	let mockContext: any;
 	let mockRequestWithAuthentication: jest.Mock;
 
@@ -34,10 +31,10 @@ describe('GenericFunctions - microsoftCosmosDbRequest', () => {
 			},
 		};
 
-		const result = await microsoftCosmosDbRequest.call(mockContext, requestOptions);
+		const result = await makeAzureCosmosDbRequest.call(mockContext, requestOptions);
 
 		expect(mockRequestWithAuthentication).toHaveBeenCalledWith(
-			'microsoftCosmosDbSharedKeyApi',
+			'microsoftAzureCosmosDbSharedKeyApi',
 			expect.objectContaining({
 				method: 'GET',
 				baseURL: 'https://us-east-1.documents.azure.com/dbs/first_database_1',
@@ -63,7 +60,7 @@ describe('GenericFunctions - microsoftCosmosDbRequest', () => {
 			},
 		};
 
-		await expect(microsoftCosmosDbRequest.call(mockContext, requestOptions)).rejects.toThrow(
+		await expect(makeAzureCosmosDbRequest.call(mockContext, requestOptions)).rejects.toThrow(
 			'Database account not found in credentials!',
 		);
 
@@ -89,7 +86,7 @@ describe('GenericFunctions - microsoftCosmosDbRequest', () => {
 			},
 		};
 
-		await expect(microsoftCosmosDbRequest.call(mockContext, requestOptions)).rejects.toThrow(
+		await expect(makeAzureCosmosDbRequest.call(mockContext, requestOptions)).rejects.toThrow(
 			'The Cosmos DB credentials are not valid!',
 		);
 
@@ -115,7 +112,7 @@ describe('GenericFunctions - microsoftCosmosDbRequest', () => {
 			},
 		};
 
-		await expect(microsoftCosmosDbRequest.call(mockContext, requestOptions)).rejects.toThrow(
+		await expect(makeAzureCosmosDbRequest.call(mockContext, requestOptions)).rejects.toThrow(
 			'The Cosmos DB credentials are not valid!',
 		);
 
@@ -141,7 +138,7 @@ describe('GenericFunctions - microsoftCosmosDbRequest', () => {
 			},
 		};
 
-		await expect(microsoftCosmosDbRequest.call(mockContext, requestOptions)).rejects.toThrow(
+		await expect(makeAzureCosmosDbRequest.call(mockContext, requestOptions)).rejects.toThrow(
 			'The requested resource was not found!',
 		);
 
@@ -163,7 +160,7 @@ describe('GenericFunctions - microsoftCosmosDbRequest', () => {
 			},
 		};
 
-		await expect(microsoftCosmosDbRequest.call(mockContext, requestOptions)).rejects.toThrow(
+		await expect(makeAzureCosmosDbRequest.call(mockContext, requestOptions)).rejects.toThrow(
 			'Cosmos DB error response [500]: Internal Server Error',
 		);
 
@@ -184,7 +181,7 @@ describe('GenericFunctions - microsoftCosmosDbRequest', () => {
 			},
 		};
 
-		await expect(microsoftCosmosDbRequest.call(mockContext, requestOptions)).rejects.toThrow(
+		await expect(makeAzureCosmosDbRequest.call(mockContext, requestOptions)).rejects.toThrow(
 			'Cosmos DB error response [undefined]: Unexpected failure',
 		);
 

@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-argument */
 import type { ILoadOptionsFunctions } from 'n8n-workflow';
 
 import { fetchPartitionKeyField } from '../GenericFunctions';
@@ -42,7 +41,7 @@ describe('GenericFunctions - fetchPartitionKeyField', () => {
 		const response = await fetchPartitionKeyField.call(mockContext);
 
 		expect(mockMicrosoftCosmosDbRequest).toHaveBeenCalledWith(
-			'microsoftCosmosDbSharedKeyApi',
+			'microsoftAzureCosmosDbSharedKeyApi',
 			expect.objectContaining({
 				method: 'GET',
 				url: '/colls/coll-1',

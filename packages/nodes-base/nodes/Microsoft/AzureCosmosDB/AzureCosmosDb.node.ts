@@ -3,28 +3,28 @@ import { NodeConnectionType } from 'n8n-workflow';
 
 import { containerFields, containerOperations } from './descriptions/ContainerDescription';
 import { itemFields, itemOperations } from './descriptions/ItemDescription';
-import { getProperties, searchContainers, searchItems } from './GenericFunctions';
+import { searchContainers, searchItems } from './GenericFunctions';
 
-export class CosmosDb implements INodeType {
+export class AzureCosmosDb implements INodeType {
 	description: INodeTypeDescription = {
-		displayName: 'Cosmos DB',
-		name: 'cosmosDb',
+		displayName: 'Azure Cosmos DB',
+		name: 'azureCosmosDb',
 		icon: {
-			light: 'file:CosmosDB.svg',
-			dark: 'file:CosmosDB.svg',
+			light: 'file:AzureCosmosDB.svg',
+			dark: 'file:AzureCosmosDB.svg',
 		},
 		group: ['transform'],
 		version: 1,
 		subtitle: '={{$parameter["operation"] + ": " + $parameter["resource"]}}',
-		description: 'Interact with Cosmos DB API',
+		description: 'Interact with Azure Cosmos DB API',
 		defaults: {
-			name: 'Cosmos Db',
+			name: 'Azure Cosmos Db',
 		},
 		inputs: [NodeConnectionType.Main],
 		outputs: [NodeConnectionType.Main],
 		credentials: [
 			{
-				name: 'microsoftCosmosDbSharedKeyApi',
+				name: 'microsoftAzureCosmosDbSharedKeyApi',
 				required: true,
 			},
 		],
@@ -64,7 +64,6 @@ export class CosmosDb implements INodeType {
 		listSearch: {
 			searchContainers,
 			searchItems,
-			getProperties,
 		},
 	};
 }

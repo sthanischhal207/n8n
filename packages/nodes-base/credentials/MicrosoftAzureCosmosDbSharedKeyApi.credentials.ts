@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-argument */
 import {
 	ApplicationError,
 	type ICredentialDataDecryptedObject,
@@ -10,14 +9,14 @@ import {
 import {
 	getAuthorizationTokenUsingMasterKey,
 	HeaderConstants,
-} from '../nodes/Microsoft/CosmosDB/GenericFunctions';
+} from '../nodes/Microsoft/AzureCosmosDB/GenericFunctions';
 
-export class MicrosoftCosmosDbSharedKeyApi implements ICredentialType {
-	name = 'microsoftCosmosDbSharedKeyApi';
+export class MicrosoftAzureCosmosDbSharedKeyApi implements ICredentialType {
+	name = 'microsoftAzureCosmosDbSharedKeyApi';
 
-	displayName = 'Cosmos DB API';
+	displayName = 'Azure Cosmos DB API';
 
-	documentationUrl = 'microsoftCosmosDb';
+	documentationUrl = 'microsoftAzureCosmosDb';
 
 	properties: INodeProperties[] = [
 		{
@@ -43,6 +42,7 @@ export class MicrosoftCosmosDbSharedKeyApi implements ICredentialType {
 			description: 'Database name',
 			type: 'string',
 			default: '',
+			required: true,
 		},
 		{
 			displayName: 'Base URL',
@@ -56,6 +56,12 @@ export class MicrosoftCosmosDbSharedKeyApi implements ICredentialType {
 		credentials: ICredentialDataDecryptedObject,
 		requestOptions: IHttpRequestOptions,
 	): Promise<IHttpRequestOptions> {
+		if (!credentials.database) {
+			throw new ApplicationError(
+				'Database is required to perform this operation. Please set it in the credentials.',
+			);
+		}
+
 		if (requestOptions.qs) {
 			for (const [key, value] of Object.entries(requestOptions.qs)) {
 				if (value === undefined) {

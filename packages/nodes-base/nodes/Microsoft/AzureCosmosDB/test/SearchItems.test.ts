@@ -37,7 +37,7 @@ describe('GenericFunctions - searchItems', () => {
 		const response = await searchItems.call(mockContext);
 
 		expect(mockRequestWithAuthentication).toHaveBeenCalledWith(
-			'microsoftCosmosDbSharedKeyApi',
+			'microsoftAzureCosmosDbSharedKeyApi',
 			expect.objectContaining({
 				method: 'GET',
 				url: '/colls/coll-1/docs',

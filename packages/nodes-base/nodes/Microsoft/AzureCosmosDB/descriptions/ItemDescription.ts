@@ -1,4 +1,4 @@
-import type { INodeProperties } from 'n8n-workflow';
+import type { IExecuteSingleFunctions, IHttpRequestOptions, INodeProperties } from 'n8n-workflow';
 
 import {
 	formatCustomProperties,
@@ -6,7 +6,7 @@ import {
 	handlePagination,
 	presendLimitField,
 	processResponseItems,
-	validateOperations,
+	simplifyData,
 	validatePartitionKey,
 	validateQueryParameters,
 } from '../GenericFunctions';
@@ -50,7 +50,16 @@ export const itemOperations: INodeProperties[] = [
 				description: 'Delete an existing item',
 				routing: {
 					send: {
-						preSend: [validatePartitionKey],
+						preSend: [
+							validatePartitionKey,
+							async function (
+								this: IExecuteSingleFunctions,
+								requestOptions: IHttpRequestOptions,
+							): Promise<IHttpRequestOptions> {
+								console.log('Request', requestOptions);
+								return requestOptions;
+							},
+						],
 					},
 					request: {
 						method: 'DELETE',
@@ -86,7 +95,7 @@ export const itemOperations: INodeProperties[] = [
 						},
 					},
 					output: {
-						postReceive: [handleErrorPostReceive],
+						postReceive: [simplifyData, handleErrorPostReceive],
 					},
 				},
 				action: 'Get item',
@@ -108,15 +117,14 @@ export const itemOperations: INodeProperties[] = [
 						url: '=/colls/{{ $parameter["collId"] }}/docs',
 					},
 					output: {
-						postReceive: [processResponseItems, handleErrorPostReceive],
+						postReceive: [processResponseItems, simplifyData, handleErrorPostReceive],
 					},
 				},
 				action: 'Get many items',
 			},
 			{
-				name: 'Query',
+				name: 'Execute Query',
 				value: 'query',
-				description: 'Query items',
 				routing: {
 					send: {
 						preSend: [validateQueryParameters],
@@ -127,10 +135,19 @@ export const itemOperations: INodeProperties[] = [
 						headers: {
 							'Content-Type': 'application/query+json',
 							'x-ms-documentdb-isquery': 'True',
+							'x-ms-documentdb-query-enablecrosspartition': 'True',
 						},
 					},
 					output: {
-						postReceive: [processResponseItems, handleErrorPostReceive],
+						postReceive: [
+							{
+								type: 'rootProperty',
+								properties: {
+									property: 'Documents',
+								},
+							},
+							handleErrorPostReceive,
+						],
 					},
 				},
 				action: 'Query items',
@@ -141,10 +158,20 @@ export const itemOperations: INodeProperties[] = [
 				description: 'Update an existing item',
 				routing: {
 					send: {
-						preSend: [validateOperations, validatePartitionKey],
+						preSend: [
+							formatCustomProperties,
+							validatePartitionKey,
+							async function (
+								this: IExecuteSingleFunctions,
+								requestOptions: IHttpRequestOptions,
+							): Promise<IHttpRequestOptions> {
+								console.log('Request', requestOptions);
+								return requestOptions;
+							},
+						],
 					},
 					request: {
-						method: 'PATCH',
+						method: 'PUT',
 						url: '=/colls/{{ $parameter["collId"] }}/docs/{{ $parameter["id"] }}',
 						headers: {
 							'Content-Type': 'application/json-patch+json',
@@ -207,34 +234,12 @@ export const createFields: INodeProperties[] = [
 		],
 	},
 	{
-		displayName: 'ID',
-		name: 'newId',
-		type: 'string',
-		default: '',
-		placeholder: 'e.g. AndersenFamily',
-		description: "Item's ID",
-		required: true,
-		displayOptions: {
-			show: {
-				resource: ['item'],
-				operation: ['create'],
-			},
-		},
-		routing: {
-			send: {
-				type: 'body',
-				property: 'id',
-				value: '={{$value}}',
-			},
-		},
-	},
-	{
-		displayName: 'Custom Properties',
+		displayName: 'Item Contents',
 		name: 'customProperties',
 		type: 'json',
-		default: '{}',
-		placeholder: '{ "LastName": "Andersen", "Address": { "State": "WA", "City": "Seattle" } }',
-		description: 'User-defined JSON object representing the document properties',
+		default: '{\n\t"id": "replace_with_new_document_id"\n}',
+		description: 'The item contents as a JSON object',
+		hint: 'The item requires an id and partition key value if a custom key is set',
 		required: true,
 		displayOptions: {
 			show: {
@@ -299,7 +304,7 @@ export const deleteFields: INodeProperties[] = [
 			mode: 'list',
 			value: '',
 		},
-		description: "Select the item's ID",
+		description: 'Select the item to be deleted',
 		displayOptions: {
 			show: {
 				resource: ['item'],
@@ -331,28 +336,6 @@ export const deleteFields: INodeProperties[] = [
 					},
 				],
 				placeholder: 'e.g. AndersenFamily',
-			},
-		],
-	},
-	{
-		displayName: 'Additional Fields',
-		name: 'additionalFields',
-		type: 'collection',
-		placeholder: 'Add Partition Key',
-		default: {},
-		displayOptions: {
-			show: {
-				resource: ['item'],
-				operation: ['delete'],
-			},
-		},
-		options: [
-			{
-				displayName: 'Partition Key',
-				name: 'partitionKey',
-				type: 'string',
-				default: '',
-				description: 'Specify the partition key for this item',
 			},
 		],
 	},
@@ -412,7 +395,7 @@ export const getFields: INodeProperties[] = [
 			mode: 'list',
 			value: '',
 		},
-		description: "Select the item's ID",
+		description: 'Select the item to get',
 		displayOptions: {
 			show: {
 				resource: ['item'],
@@ -448,26 +431,17 @@ export const getFields: INodeProperties[] = [
 		],
 	},
 	{
-		displayName: 'Additional Fields',
-		name: 'additionalFields',
-		type: 'collection',
-		placeholder: 'Add Partition Key',
-		default: {},
+		displayName: 'Simplify',
+		name: 'simple',
+		type: 'boolean',
 		displayOptions: {
 			show: {
 				resource: ['item'],
 				operation: ['get'],
 			},
 		},
-		options: [
-			{
-				displayName: 'Partition Key',
-				name: 'partitionKey',
-				type: 'string',
-				default: '',
-				description: 'Specify the partition key for this item',
-			},
-		],
+		default: true,
+		description: 'Whether to return a simplified version of the response instead of the raw data',
 	},
 ];
 
@@ -547,6 +521,19 @@ export const getAllFields: INodeProperties[] = [
 		},
 		validateType: 'number',
 	},
+	{
+		displayName: 'Simplify',
+		name: 'simple',
+		type: 'boolean',
+		displayOptions: {
+			show: {
+				resource: ['item'],
+				operation: ['getAll'],
+			},
+		},
+		default: true,
+		description: 'Whether to return a simplified version of the response instead of the raw data',
+	},
 ];
 
 export const queryFields: INodeProperties[] = [
@@ -599,14 +586,22 @@ export const queryFields: INodeProperties[] = [
 		name: 'query',
 		type: 'string',
 		default: '',
+		placeholder: 'e.g. SELECT id, name FROM c WHERE c.name = $1',
+		noDataExpression: true,
 		required: true,
+		description:
+			"The SQL query to execute. Use $1, $2, $3, etc., to reference the 'Query Parameters' set in the options below.",
+		typeOptions: {
+			editor: 'sqlEditor',
+			sqlDialect: 'PostgreSQL',
+		},
+		hint: 'Consider using query parameters to prevent SQL injection attacks. Add them in the options below.',
 		displayOptions: {
 			show: {
 				resource: ['item'],
 				operation: ['query'],
 			},
 		},
-		placeholder: 'SELECT * FROM c WHERE c.name = @Name',
 		routing: {
 			send: {
 				type: 'body',
@@ -616,14 +611,13 @@ export const queryFields: INodeProperties[] = [
 		},
 	},
 	{
-		displayName: 'Parameters',
-		name: 'parameters',
+		displayName: 'Options',
+		name: 'options',
 		type: 'fixedCollection',
-		required: true,
-		default: [],
-		placeholder: 'Add Parameter',
+		default: {},
+		placeholder: 'Add options',
 		typeOptions: {
-			multipleValues: true,
+			multipleValues: false,
 		},
 		displayOptions: {
 			show: {
@@ -633,34 +627,22 @@ export const queryFields: INodeProperties[] = [
 		},
 		options: [
 			{
-				name: 'parameters',
-				displayName: 'Parameter',
+				name: 'queryOptions',
+				displayName: 'Query Options',
 				values: [
 					{
-						displayName: 'Name',
-						name: 'name',
+						displayName: 'Query Parameters',
+						name: 'queryParameters',
 						type: 'string',
 						default: '',
-						placeholder: 'e.g., @name',
-					},
-					{
-						displayName: 'Value',
-						name: 'value',
-						type: 'string',
-						default: '',
-						placeholder: 'e.g., John',
+						description:
+							'Comma-separated list of values used as query parameters. Use $1, $2, $3, etc., in your query.',
+						hint: 'Reference them in your query as $1, $2, $3…',
+						placeholder: 'e.g. value1,value2,value3',
 					},
 				],
 			},
 		],
-		routing: {
-			send: {
-				type: 'body',
-				property: 'parameters',
-				value:
-					'={{$parameter["parameters"] && $parameter["parameters"].parameters ? $parameter["parameters"].parameters : []}}',
-			},
-		},
 	},
 ];
 
@@ -754,176 +736,18 @@ export const updateFields: INodeProperties[] = [
 		],
 	},
 	{
-		displayName: 'Operations',
-		name: 'operations',
-		type: 'fixedCollection',
-		placeholder: 'Add Operation',
-		description: 'Patch operations to apply to the document',
+		displayName: 'Item Contents',
+		name: 'customProperties',
+		type: 'json',
+		default: '{}',
+		description: 'The item contents as a JSON object',
 		required: true,
-		default: [],
-		typeOptions: {
-			multipleValues: true,
-		},
 		displayOptions: {
 			show: {
 				resource: ['item'],
 				operation: ['update'],
 			},
 		},
-		options: [
-			{
-				name: 'operations',
-				displayName: 'Operation',
-				values: [
-					{
-						displayName: 'Operation',
-						name: 'op',
-						type: 'options',
-						options: [
-							{ name: 'Add', value: 'add' },
-							{ name: 'Increment', value: 'incr' },
-							{ name: 'Move', value: 'move' },
-							{ name: 'Remove', value: 'remove' },
-							{ name: 'Replace', value: 'replace' },
-							{ name: 'Set', value: 'set' },
-						],
-						default: 'set',
-					},
-					{
-						displayName: 'From Path',
-						name: 'from',
-						type: 'resourceLocator',
-						description: 'Select a field from the list or enter it manually',
-						displayOptions: {
-							show: {
-								op: ['move'],
-							},
-						},
-						default: {
-							mode: 'list',
-							value: '',
-						},
-						modes: [
-							{
-								displayName: 'From List',
-								name: 'list',
-								type: 'list',
-								typeOptions: {
-									searchListMethod: 'getProperties',
-									searchable: true,
-								},
-							},
-							{
-								displayName: 'By Name',
-								name: 'manual',
-								type: 'string',
-								hint: 'Enter the field name manually',
-								placeholder: 'e.g. /Parents/0/FamilyName',
-							},
-						],
-					},
-					{
-						displayName: 'To Path',
-						name: 'toPath',
-						type: 'resourceLocator',
-						description: 'Select a field from the list or enter it manually',
-						displayOptions: {
-							show: {
-								op: ['move'],
-							},
-						},
-						default: {
-							mode: 'list',
-							value: '',
-						},
-						modes: [
-							{
-								displayName: 'From List',
-								name: 'list',
-								type: 'list',
-								typeOptions: {
-									searchListMethod: 'getProperties',
-									searchable: true,
-								},
-							},
-							{
-								displayName: 'By Name',
-								name: 'manual',
-								type: 'string',
-								hint: 'Enter the field name manually',
-								placeholder: 'e.g. /Parents/0/FamilyName',
-							},
-						],
-					},
-					{
-						displayName: 'Path',
-						name: 'path',
-						type: 'resourceLocator',
-						description: 'Select a field from the list or enter it manually',
-						default: {
-							mode: 'list',
-							value: '',
-						},
-						displayOptions: {
-							show: {
-								op: ['add', 'remove', 'set', 'incr', 'replace'],
-							},
-						},
-						modes: [
-							{
-								displayName: 'From List',
-								name: 'list',
-								type: 'list',
-								typeOptions: {
-									searchListMethod: 'getProperties',
-									searchable: true,
-								},
-							},
-							{
-								displayName: 'By Name',
-								name: 'manual',
-								type: 'string',
-								hint: 'Enter the field name manually',
-								placeholder: 'e.g. /Parents/0/FamilyName',
-							},
-						],
-					},
-					{
-						displayName: 'Value',
-						name: 'value',
-						type: 'string',
-						default: '',
-						displayOptions: {
-							show: {
-								op: ['add', 'set', 'replace', 'incr'],
-							},
-						},
-					},
-				],
-			},
-		],
-	},
-	{
-		displayName: 'Additional Fields',
-		name: 'additionalFields',
-		type: 'collection',
-		placeholder: 'Add Partition Key',
-		default: {},
-		displayOptions: {
-			show: {
-				resource: ['item'],
-				operation: ['update'],
-			},
-		},
-		options: [
-			{
-				displayName: 'Partition Key',
-				name: 'partitionKey',
-				type: 'string',
-				default: '',
-				description: 'Specify the partition key for this item',
-			},
-		],
 	},
 ];
 

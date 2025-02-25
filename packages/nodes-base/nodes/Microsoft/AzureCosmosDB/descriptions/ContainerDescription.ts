@@ -4,6 +4,7 @@ import {
 	formatJSONFields,
 	handleErrorPostReceive,
 	processResponseContainers,
+	simplifyData,
 	validateContainerFields,
 } from '../GenericFunctions';
 
@@ -73,7 +74,7 @@ export const containerOperations: INodeProperties[] = [
 						url: '=/colls/{{ $parameter["collId"] }}',
 					},
 					output: {
-						postReceive: [handleErrorPostReceive],
+						postReceive: [simplifyData, handleErrorPostReceive],
 					},
 				},
 				action: 'Get container',
@@ -89,7 +90,7 @@ export const containerOperations: INodeProperties[] = [
 						url: '/colls',
 					},
 					output: {
-						postReceive: [handleErrorPostReceive, processResponseContainers],
+						postReceive: [processResponseContainers, simplifyData, handleErrorPostReceive],
 					},
 				},
 				action: 'Get many containers',
@@ -105,8 +106,8 @@ export const createFields: INodeProperties[] = [
 		name: 'newid',
 		type: 'string',
 		default: '',
-		placeholder: 'e.g. AndersenFamily',
-		description: "Container's ID",
+		placeholder: 'e.g. Container1',
+		description: 'Unique identifier for the new container',
 		required: true,
 		displayOptions: {
 			show: {
@@ -123,21 +124,6 @@ export const createFields: INodeProperties[] = [
 		},
 	},
 	{
-		displayName: 'Partition Key',
-		name: 'partitionKey',
-		type: 'json',
-		default: '{}',
-		placeholder: '"paths": ["/AccountNumber"],"kind": "Hash", "Version": 2',
-		description: 'User-defined JSON object representing the partition key',
-		required: true,
-		displayOptions: {
-			show: {
-				resource: ['container'],
-				operation: ['create'],
-			},
-		},
-	},
-	{
 		displayName: 'Additional Fields',
 		name: 'additionalFields',
 		default: {},
@@ -149,12 +135,20 @@ export const createFields: INodeProperties[] = [
 		},
 		options: [
 			{
+				displayName: 'Partition Key',
+				name: 'partitionKey',
+				type: 'json',
+				default: '{\n\t"paths": [\n\t\t"/id"\n\t],\n\t"kind": "Hash",\n\t"version": 2\n}',
+				description:
+					'The partition key is used to automatically distribute data across partitions for scalability. Choose a property in your JSON document that has a wide range of values and evenly distributes request volume.',
+				required: true,
+			},
+			{
 				displayName: 'Indexing Policy',
 				name: 'indexingPolicy',
 				type: 'json',
-				default: '{}',
-				placeholder:
-					'"automatic": true, "indexingMode": "Consistent", "includedPaths": [{ "path": "/*", "indexes": [{ "dataType": "String", "precision": -1, "kind": "Range" }]}]',
+				default:
+					'{\n\t"indexingMode": "consistent",\n\t"automatic": true,\n\t"includedPaths": [\n\t\t{\n\t\t\t"path": "/*"\n\t\t}\n\t],\n\t"excludedPaths": []\n}',
 				description: 'This value is used to configure indexing policy',
 			},
 			{
@@ -229,9 +223,36 @@ export const getFields: INodeProperties[] = [
 			},
 		],
 	},
+	{
+		displayName: 'Simplify',
+		name: 'simple',
+		type: 'boolean',
+		displayOptions: {
+			show: {
+				resource: ['container'],
+				operation: ['get'],
+			},
+		},
+		default: true,
+		description: 'Whether to return a simplified version of the response instead of the raw data',
+	},
 ];
 
-export const getAllFields: INodeProperties[] = [];
+export const getAllFields: INodeProperties[] = [
+	{
+		displayName: 'Simplify',
+		name: 'simple',
+		type: 'boolean',
+		displayOptions: {
+			show: {
+				resource: ['container'],
+				operation: ['getAll'],
+			},
+		},
+		default: true,
+		description: 'Whether to return a simplified version of the response instead of the raw data',
+	},
+];
 
 export const deleteFields: INodeProperties[] = [
 	{
