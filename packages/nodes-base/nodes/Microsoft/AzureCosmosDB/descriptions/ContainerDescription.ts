@@ -55,7 +55,7 @@ export const containerOperations: INodeProperties[] = [
 							{
 								type: 'set',
 								properties: {
-									value: '={{ { "success": true } }}',
+									value: '={{ { "deleted": true } }}',
 								},
 							},
 						],

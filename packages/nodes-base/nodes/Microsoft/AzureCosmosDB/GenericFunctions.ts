@@ -11,7 +11,7 @@ import type {
 	INodeListSearchItems,
 	INodeListSearchResult,
 } from 'n8n-workflow';
-import { ApplicationError, NodeApiError } from 'n8n-workflow';
+import { ApplicationError, NodeApiError, NodeOperationError } from 'n8n-workflow';
 
 export const HeaderConstants = {
 	AUTHORIZATION: 'Authorization',
@@ -129,7 +129,7 @@ export async function fetchPartitionKeyField(
 		url: `/colls/${collId}`,
 	})) as { partitionKey?: { paths?: string[] } };
 
-	const partitionKeyField = responseData.partitionKey?.paths?.[0]?.replace('/', '');
+	const partitionKeyField = responseData?.partitionKey?.paths?.[0]?.replace('/', '');
 
 	return {
 		results: partitionKeyField ? [{ name: partitionKeyField, value: partitionKeyField }] : [],
@@ -174,10 +174,22 @@ export async function validateQueryParameters(
 	return requestOptions;
 }
 
-function parseCustomProperties(this: IExecuteSingleFunctions): Record<string, unknown> {
+export function parseCustomProperties(this: IExecuteSingleFunctions): Record<string, unknown> {
 	const customProperties = this.getNodeParameter('customProperties', {});
 
-	if (!customProperties) return {};
+	if (
+		customProperties &&
+		(Object.keys(customProperties).length === 2 || Object.keys(customProperties).length === 0)
+	) {
+		throw new NodeApiError(
+			this.getNode(),
+			{},
+			{
+				message: 'No custom property provided',
+				description: 'Custom properties must contain at least one field to update',
+			},
+		);
+	}
 
 	try {
 		return typeof customProperties === 'string' ? JSON.parse(customProperties) : customProperties;
@@ -198,11 +210,13 @@ export async function validatePartitionKey(
 	requestOptions: IHttpRequestOptions,
 ): Promise<IHttpRequestOptions> {
 	const operation = this.getNodeParameter('operation') as string;
+	const customProperties = this.getNodeParameter('customProperties', {}) as IDataObject;
 
 	const partitionKeyResult = await fetchPartitionKeyField.call(
 		this as unknown as ILoadOptionsFunctions,
 	);
-	const partitionKeyField = partitionKeyResult.results?.[0]?.value ?? '';
+	const partitionKeyField =
+		partitionKeyResult.results.length > 0 ? partitionKeyResult.results[0].value : '';
 
 	if (!partitionKeyField) {
 		throw new NodeApiError(
@@ -215,7 +229,7 @@ export async function validatePartitionKey(
 		);
 	}
 
-	if (typeof partitionKeyField !== 'string' && typeof partitionKeyField !== 'number') {
+	if (!(typeof partitionKeyField === 'string' || typeof partitionKeyField === 'number')) {
 		throw new NodeApiError(
 			this.getNode(),
 			{},
@@ -226,15 +240,97 @@ export async function validatePartitionKey(
 		);
 	}
 
-	const parsedProperties = parseCustomProperties.call(this);
+	let parsedProperties: Record<string, unknown>;
 
-	const idParam = this.getNodeParameter('id', {}) as { mode: string; value: string };
-	const partitionKeyValue: string | undefined =
-		operation === 'create'
-			? (parsedProperties[partitionKeyField as keyof typeof parsedProperties] as string)
-			: idParam.value;
+	try {
+		parsedProperties =
+			typeof customProperties === 'string' ? JSON.parse(customProperties) : customProperties;
+	} catch (error) {
+		throw new NodeApiError(
+			this.getNode(),
+			{},
+			{
+				message: 'Invalid custom properties format',
+				description: 'Custom properties must be a valid JSON object.',
+			},
+		);
+	}
+	let id: string | undefined | { mode: string; value: string };
+	let partitionKeyValue: string | undefined;
 
-	if (!partitionKeyValue) {
+	if (operation === 'create') {
+		if (partitionKeyField === 'id') {
+			partitionKeyValue = this.getNodeParameter('newId', '') as string;
+		} else {
+			if (!Object.prototype.hasOwnProperty.call(parsedProperties, partitionKeyField)) {
+				throw new NodeApiError(
+					this.getNode(),
+					{},
+					{
+						message: 'Partition key not found in custom properties',
+						description: `Partition key "${partitionKeyField}" must be present and have a valid, non-empty value in custom properties.`,
+					},
+				);
+			}
+			partitionKeyValue = parsedProperties[partitionKeyField] as string;
+		}
+	} else if (operation === 'update') {
+		const additionalFields = this.getNodeParameter('additionalFields', {}) as IDataObject;
+		partitionKeyValue = additionalFields.partitionKey as string;
+
+		if (!partitionKeyValue && partitionKeyField !== 'id') {
+			throw new NodeApiError(
+				this.getNode(),
+				{},
+				{
+					message: `Partition key "${partitionKeyField}" is required for update`,
+					description: `Please provide a valid value for partition key "${partitionKeyField}".`,
+				},
+			);
+		}
+
+		if (partitionKeyField === 'id') {
+			id = this.getNodeParameter('id', {}) as { mode: string; value: string };
+			partitionKeyValue = id.value;
+		}
+
+		let requestBody: IDataObject;
+		if (typeof requestOptions.body === 'string') {
+			try {
+				requestBody = JSON.parse(requestOptions.body) as IDataObject;
+			} catch (error) {
+				throw new NodeOperationError(this.getNode(), 'Failed to parse requestOptions.body');
+			}
+		} else {
+			requestBody = (requestOptions.body as IDataObject) || {};
+		}
+
+		requestOptions.body = JSON.stringify({
+			...requestBody,
+			[partitionKeyField]: partitionKeyValue,
+		});
+	} else {
+		if (partitionKeyField === 'id') {
+			id = this.getNodeParameter('id', {}) as { mode: string; value: string };
+
+			if (!id?.value) {
+				throw new NodeApiError(
+					this.getNode(),
+					{},
+					{
+						message: 'Item ID is missing or invalid',
+						description: "The item must have a valid value selected from 'Item'",
+					},
+				);
+			}
+			partitionKeyValue = id.value;
+		} else {
+			const additionalFields = this.getNodeParameter('additionalFields', {}) as IDataObject;
+			partitionKeyValue = additionalFields.partitionKey as string;
+		}
+	}
+
+	if (partitionKeyValue === undefined || partitionKeyValue === null || partitionKeyValue === '') {
 		throw new NodeApiError(
 			this.getNode(),
 			{},
@@ -606,6 +702,7 @@ export async function simplifyData(
 ): Promise<INodeExecutionData[]> {
 	const simple = this.getNodeParameter('simple') as boolean;
 	const resource = this.getNodeParameter('resource');
+	const operation = this.getNodeParameter('operation');
 
 	if (!simple) {
 		return items;
@@ -648,7 +745,10 @@ export async function simplifyData(
 
 	return items.map((item) => {
 		const simplifiedData = simplifyFields(item.json || item);
-		if (items.length === 1) return { json: simplifiedData } as INodeExecutionData;
+		if (items.length === 1) {
+			if (operation === 'get') return { json: simplifiedData } as INodeExecutionData;
+			return { ...simplifiedData } as INodeExecutionData;
+		}
 		return { ...simplifiedData } as INodeExecutionData;
 	});
 }

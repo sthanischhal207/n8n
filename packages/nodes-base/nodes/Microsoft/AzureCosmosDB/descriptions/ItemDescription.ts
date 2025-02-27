@@ -1,4 +1,4 @@
-import type { IExecuteSingleFunctions, IHttpRequestOptions, INodeProperties } from 'n8n-workflow';
+import type { INodeProperties } from 'n8n-workflow';
 
 import {
 	formatCustomProperties,
@@ -50,16 +50,7 @@ export const itemOperations: INodeProperties[] = [
 				description: 'Delete an existing item',
 				routing: {
 					send: {
-						preSend: [
-							validatePartitionKey,
-							async function (
-								this: IExecuteSingleFunctions,
-								requestOptions: IHttpRequestOptions,
-							): Promise<IHttpRequestOptions> {
-								console.log('Request', requestOptions);
-								return requestOptions;
-							},
-						],
+						preSend: [validatePartitionKey],
 					},
 					request: {
 						method: 'DELETE',
@@ -71,7 +62,7 @@ export const itemOperations: INodeProperties[] = [
 							{
 								type: 'set',
 								properties: {
-									value: '={{ { "success": true } }}',
+									value: '={{ { "deleted": true } }}',
 								},
 							},
 						],
@@ -158,17 +149,7 @@ export const itemOperations: INodeProperties[] = [
 				description: 'Update an existing item',
 				routing: {
 					send: {
-						preSend: [
-							formatCustomProperties,
-							validatePartitionKey,
-							async function (
-								this: IExecuteSingleFunctions,
-								requestOptions: IHttpRequestOptions,
-							): Promise<IHttpRequestOptions> {
-								console.log('Request', requestOptions);
-								return requestOptions;
-							},
-						],
+						preSend: [formatCustomProperties, validatePartitionKey],
 					},
 					request: {
 						method: 'PUT',
@@ -339,6 +320,28 @@ export const deleteFields: INodeProperties[] = [
 			},
 		],
 	},
+	{
+		displayName: 'Additional Fields',
+		name: 'additionalFields',
+		type: 'collection',
+		placeholder: 'Add Partition Key',
+		default: {},
+		displayOptions: {
+			show: {
+				resource: ['item'],
+				operation: ['delete'],
+			},
+		},
+		options: [
+			{
+				displayName: 'Partition Key',
+				name: 'partitionKey',
+				type: 'string',
+				default: '',
+				hint: 'Only required if a custom partition key is set for the container',
+			},
+		],
+	},
 ];
 
 export const getFields: INodeProperties[] = [
@@ -442,6 +445,28 @@ export const getFields: INodeProperties[] = [
 		},
 		default: true,
 		description: 'Whether to return a simplified version of the response instead of the raw data',
+	},
+	{
+		displayName: 'Additional Fields',
+		name: 'additionalFields',
+		type: 'collection',
+		placeholder: 'Add Partition Key',
+		default: {},
+		displayOptions: {
+			show: {
+				resource: ['item'],
+				operation: ['get'],
+			},
+		},
+		options: [
+			{
+				displayName: 'Partition Key',
+				name: 'partitionKey',
+				type: 'string',
+				default: '',
+				hint: 'Only required if a custom partition key is set for the container',
+			},
+		],
 	},
 ];
 
@@ -748,6 +773,28 @@ export const updateFields: INodeProperties[] = [
 				operation: ['update'],
 			},
 		},
+	},
+	{
+		displayName: 'Additional Fields',
+		name: 'additionalFields',
+		type: 'collection',
+		placeholder: 'Add Partition Key',
+		default: {},
+		displayOptions: {
+			show: {
+				resource: ['item'],
+				operation: ['update'],
+			},
+		},
+		options: [
+			{
+				displayName: 'Partition Key',
+				name: 'partitionKey',
+				type: 'string',
+				hint: 'Only required if a custom partition key is set for the container',
+				default: '',
+			},
+		],
 	},
 ];
 
