@@ -1,6 +1,6 @@
 import type { ILoadOptionsFunctions } from 'n8n-workflow';
 
-import { fetchPartitionKeyField } from '../GenericFunctions';
+import { fetchPartitionKeyField } from '../generalFunctions/dataFetching';
 
 describe('GenericFunctions - fetchPartitionKeyField', () => {
 	const mockMicrosoftCosmosDbRequest = jest.fn();
@@ -63,7 +63,7 @@ describe('GenericFunctions - fetchPartitionKeyField', () => {
 
 		await expect(fetchPartitionKeyField.call(mockContext)).rejects.toThrowError(
 			expect.objectContaining({
-				message: 'Container is required to determine the partition key.',
+				message: 'Container is required to search items',
 			}),
 		);
 	});

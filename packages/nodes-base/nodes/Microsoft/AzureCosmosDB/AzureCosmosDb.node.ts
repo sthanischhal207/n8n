@@ -3,7 +3,7 @@ import { NodeConnectionType } from 'n8n-workflow';
 
 import { containerFields, containerOperations } from './descriptions/ContainerDescription';
 import { itemFields, itemOperations } from './descriptions/ItemDescription';
-import { searchContainers, searchItems } from './GenericFunctions';
+import { searchContainers, searchItems } from './generalFunctions/dataFetching';
 
 export class AzureCosmosDb implements INodeType {
 	description: INodeTypeDescription = {

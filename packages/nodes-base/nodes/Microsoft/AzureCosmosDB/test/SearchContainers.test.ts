@@ -1,6 +1,6 @@
 import type { ILoadOptionsFunctions } from 'n8n-workflow';
 
-import { searchContainers } from '../GenericFunctions';
+import { searchContainers } from '../generalFunctions/dataFetching';
 
 describe('GenericFunctions - searchContainers', () => {
 	const mockRequestWithAuthentication = jest.fn();

@@ -6,10 +6,8 @@ import {
 	type INodeProperties,
 } from 'n8n-workflow';
 
-import {
-	getAuthorizationTokenUsingMasterKey,
-	HeaderConstants,
-} from '../nodes/Microsoft/AzureCosmosDB/GenericFunctions';
+import { getAuthorizationTokenUsingMasterKey } from '../nodes/Microsoft/AzureCosmosDB/generalFunctions/authorization';
+import type { IHttpRequestOptionsExtended } from '../nodes/Microsoft/AzureCosmosDB/generalFunctions/helpers';
 
 export class MicrosoftAzureCosmosDbSharedKeyApi implements ICredentialType {
 	name = 'microsoftAzureCosmosDbSharedKeyApi';
@@ -56,19 +54,9 @@ export class MicrosoftAzureCosmosDbSharedKeyApi implements ICredentialType {
 		credentials: ICredentialDataDecryptedObject,
 		requestOptions: IHttpRequestOptions,
 	): Promise<IHttpRequestOptions> {
-		if (!credentials.database) {
-			throw new ApplicationError(
-				'Database is required to perform this operation. Please set it in the credentials.',
-			);
-		}
-
-		if (requestOptions.qs) {
-			for (const [key, value] of Object.entries(requestOptions.qs)) {
-				if (value === undefined) {
-					delete requestOptions.qs[key];
-				}
-			}
-		}
+		Object.keys(requestOptions.qs ?? {}).forEach(
+			(key) => requestOptions.qs?.[key] === undefined && delete requestOptions.qs?.[key],
+		);
 
 		requestOptions.headers ??= {};
 
@@ -83,42 +71,41 @@ export class MicrosoftAzureCosmosDbSharedKeyApi implements ICredentialType {
 		if (credentials.sessionToken) {
 			requestOptions.headers['x-ms-session-token'] = credentials.sessionToken;
 		}
+		const request = requestOptions as IHttpRequestOptionsExtended;
 
 		let url;
-		if (requestOptions.url) {
-			url = new URL(requestOptions.baseURL + requestOptions.url);
-			//@ts-ignore
-		} else if (requestOptions.uri) {
-			//@ts-ignore
-			url = new URL(requestOptions.uri);
+		//Custom node usage
+		if (request.url) {
+			url = new URL(request.baseURL + request.url);
+		}
+		//Http Request nodes usage
+		else if (request.uri) {
+			url = new URL(request.uri);
 		}
 
-		const pathSegments = url?.pathname.split('/').filter((segment) => segment);
-		let resourceType = '';
+		const pathSegments = url?.pathname.split('/').filter(Boolean);
+		if (!pathSegments) {
+			throw new ApplicationError('Invalid URL structure.');
+		}
+
+		const resourceTypes = ['docs', 'colls', 'dbs'] as const;
+		type ResourceType = (typeof resourceTypes)[number];
+
+		let resourceType: ResourceType | '' = '';
 		let resourceId = '';
 
-		if (pathSegments?.includes('docs')) {
-			const docsIndex = pathSegments.lastIndexOf('docs');
-			resourceType = 'docs';
-			if (pathSegments[docsIndex + 1]) {
-				const docsId = pathSegments[docsIndex + 1];
-				resourceId = pathSegments.slice(0, docsIndex).join('/') + `/docs/${docsId}`;
-			} else {
-				resourceId = pathSegments.slice(0, docsIndex).join('/');
-			}
-		} else if (pathSegments?.includes('colls')) {
-			const collsIndex = pathSegments.lastIndexOf('colls');
-			resourceType = 'colls';
-			if (pathSegments[collsIndex + 1]) {
-				const collId = pathSegments[collsIndex + 1];
-				resourceId = pathSegments.slice(0, collsIndex).join('/') + `/colls/${collId}`;
-			} else {
-				resourceId = pathSegments.slice(0, collsIndex).join('/');
-			}
-		} else if (pathSegments?.includes('dbs')) {
-			const dbsIndex = pathSegments.lastIndexOf('dbs');
-			resourceType = 'dbs';
-			resourceId = pathSegments.slice(0, dbsIndex + 2).join('/');
+		const foundResource = resourceTypes
+			.map((type) => ({ type, index: pathSegments.lastIndexOf(type) }))
+			.filter(({ index }) => index !== -1)
+			.sort((a, b) => b.index - a.index)[0];
+
+		if (foundResource) {
+			const { type, index } = foundResource;
+			resourceType = type;
+			resourceId =
+				pathSegments[index + 1] !== undefined
+					? pathSegments.slice(0, index).join('/') + `/${type}/${pathSegments[index + 1]}`
+					: pathSegments.slice(0, index).join('/');
 		} else {
 			throw new ApplicationError('Unable to determine resourceType and resourceId from the URL.');
 		}
@@ -135,7 +122,7 @@ export class MicrosoftAzureCosmosDbSharedKeyApi implements ICredentialType {
 				);
 			}
 
-			requestOptions.headers[HeaderConstants.AUTHORIZATION] = encodeURIComponent(authToken);
+			requestOptions.headers.AUTHORIZATION = encodeURIComponent(authToken);
 			await new Promise((resolve) => setTimeout(resolve, 500));
 		}
 

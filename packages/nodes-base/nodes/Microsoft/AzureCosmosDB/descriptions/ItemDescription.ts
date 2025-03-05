@@ -2,14 +2,14 @@ import type { INodeProperties } from 'n8n-workflow';
 
 import {
 	formatCustomProperties,
-	handleErrorPostReceive,
-	handlePagination,
-	presendLimitField,
 	processResponseItems,
 	simplifyData,
 	validatePartitionKey,
 	validateQueryParameters,
-} from '../GenericFunctions';
+} from '../generalFunctions/dataHandling';
+import { handleErrorPostReceive } from '../generalFunctions/errorHandling';
+import { handlePagination } from '../generalFunctions/pagination';
+import { presendLimitField } from '../generalFunctions/presendFunctions';
 
 export const itemOperations: INodeProperties[] = [
 	{
@@ -86,7 +86,7 @@ export const itemOperations: INodeProperties[] = [
 						},
 					},
 					output: {
-						postReceive: [simplifyData, handleErrorPostReceive],
+						postReceive: [handleErrorPostReceive, simplifyData],
 					},
 				},
 				action: 'Get item',

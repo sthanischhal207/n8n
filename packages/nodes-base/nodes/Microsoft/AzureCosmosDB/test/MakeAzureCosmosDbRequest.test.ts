@@ -1,4 +1,6 @@
-import { makeAzureCosmosDbRequest } from '../GenericFunctions';
+import type { IHttpRequestOptions } from 'n8n-workflow';
+
+import { makeAzureCosmosDbRequest } from '../generalFunctions/azureCosmosDbRequest';
 
 describe('GenericFunctions - makeAzureCosmosDbRequest', () => {
 	let mockContext: any;
@@ -14,6 +16,14 @@ describe('GenericFunctions - makeAzureCosmosDbRequest', () => {
 		};
 	});
 
+	const requestOptions: IHttpRequestOptions = {
+		method: 'GET',
+		url: '/example-endpoint',
+		headers: {
+			'Content-Type': 'application/json',
+		},
+	};
+
 	test('should make a successful request with correct options', async () => {
 		mockRequestWithAuthentication.mockResolvedValueOnce({ success: true });
 
@@ -22,14 +32,6 @@ describe('GenericFunctions - makeAzureCosmosDbRequest', () => {
 			database: 'first_database_1',
 			baseUrl: 'https://us-east-1.documents.azure.com/dbs/first_database_1',
 		});
-
-		const requestOptions = {
-			method: 'GET' as const,
-			url: '/example-endpoint',
-			headers: {
-				'Content-Type': 'application/json',
-			},
-		};
 
 		const result = await makeAzureCosmosDbRequest.call(mockContext, requestOptions);
 
@@ -52,14 +54,6 @@ describe('GenericFunctions - makeAzureCosmosDbRequest', () => {
 	test('should throw an error if account is missing in credentials', async () => {
 		(mockContext.getCredentials as jest.Mock).mockResolvedValueOnce({});
 
-		const requestOptions = {
-			method: 'GET' as const,
-			url: '/example-endpoint',
-			headers: {
-				'Content-Type': 'application/json',
-			},
-		};
-
 		await expect(makeAzureCosmosDbRequest.call(mockContext, requestOptions)).rejects.toThrow(
 			'Database account not found in credentials!',
 		);
@@ -77,14 +71,6 @@ describe('GenericFunctions - makeAzureCosmosDbRequest', () => {
 				},
 			},
 		});
-
-		const requestOptions = {
-			method: 'GET' as const,
-			url: '/example-endpoint',
-			headers: {
-				'Content-Type': 'application/json',
-			},
-		};
 
 		await expect(makeAzureCosmosDbRequest.call(mockContext, requestOptions)).rejects.toThrow(
 			'The Cosmos DB credentials are not valid!',
@@ -104,14 +90,6 @@ describe('GenericFunctions - makeAzureCosmosDbRequest', () => {
 			},
 		});
 
-		const requestOptions = {
-			method: 'GET' as const,
-			url: '/example-endpoint',
-			headers: {
-				'Content-Type': 'application/json',
-			},
-		};
-
 		await expect(makeAzureCosmosDbRequest.call(mockContext, requestOptions)).rejects.toThrow(
 			'The Cosmos DB credentials are not valid!',
 		);
@@ -130,14 +108,6 @@ describe('GenericFunctions - makeAzureCosmosDbRequest', () => {
 			},
 		});
 
-		const requestOptions = {
-			method: 'GET' as const,
-			url: '/example-endpoint',
-			headers: {
-				'Content-Type': 'application/json',
-			},
-		};
-
 		await expect(makeAzureCosmosDbRequest.call(mockContext, requestOptions)).rejects.toThrow(
 			'The requested resource was not found!',
 		);
@@ -152,14 +122,6 @@ describe('GenericFunctions - makeAzureCosmosDbRequest', () => {
 			message: 'Internal Server Error',
 		});
 
-		const requestOptions = {
-			method: 'GET' as const,
-			url: '/example-endpoint',
-			headers: {
-				'Content-Type': 'application/json',
-			},
-		};
-
 		await expect(makeAzureCosmosDbRequest.call(mockContext, requestOptions)).rejects.toThrow(
 			'Cosmos DB error response [500]: Internal Server Error',
 		);
@@ -172,14 +134,6 @@ describe('GenericFunctions - makeAzureCosmosDbRequest', () => {
 		mockRequestWithAuthentication.mockRejectedValueOnce({
 			cause: { error: { message: 'Unexpected failure' } },
 		});
-
-		const requestOptions = {
-			method: 'GET' as const,
-			url: '/example-endpoint',
-			headers: {
-				'Content-Type': 'application/json',
-			},
-		};
 
 		await expect(makeAzureCosmosDbRequest.call(mockContext, requestOptions)).rejects.toThrow(
 			'Cosmos DB error response [undefined]: Unexpected failure',

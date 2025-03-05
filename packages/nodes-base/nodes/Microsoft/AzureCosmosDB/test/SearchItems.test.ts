@@ -1,6 +1,6 @@
 import type { ILoadOptionsFunctions } from 'n8n-workflow';
 
-import { searchItems } from '../GenericFunctions';
+import { searchItems } from '../generalFunctions/dataFetching';
 
 describe('GenericFunctions - searchItems', () => {
 	const mockRequestWithAuthentication = jest.fn();
@@ -121,9 +121,8 @@ describe('GenericFunctions - searchItems', () => {
 		(mockContext.getNodeParameter as jest.Mock).mockReturnValueOnce({ mode: 'list', value: '' });
 
 		await expect(searchItems.call(mockContext)).rejects.toThrowError(
-			// eslint-disable-next-line @typescript-eslint/no-unsafe-argument
 			expect.objectContaining({
-				message: 'Container is required',
+				message: 'Container is required to search items',
 			}),
 		);
 	});
