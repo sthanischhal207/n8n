@@ -6,8 +6,8 @@ import {
 	type INodeProperties,
 } from 'n8n-workflow';
 
-import { getAuthorizationTokenUsingMasterKey } from '../nodes/Microsoft/AzureCosmosDB/generalFunctions/authorization';
-import type { IHttpRequestOptionsExtended } from '../nodes/Microsoft/AzureCosmosDB/generalFunctions/helpers';
+import { getAuthorizationTokenUsingMasterKey } from '../nodes/Microsoft/AzureCosmosDb/generalFunctions/authorization';
+import type { IHttpRequestOptionsExtended } from '../nodes/Microsoft/AzureCosmosDb/generalFunctions/helpers';
 
 export class MicrosoftAzureCosmosDbSharedKeyApi implements ICredentialType {
 	name = 'microsoftAzureCosmosDbSharedKeyApi';

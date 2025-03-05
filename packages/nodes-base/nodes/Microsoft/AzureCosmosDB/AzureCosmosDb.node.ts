@@ -7,7 +7,7 @@ import { searchContainers, searchItems } from './generalFunctions/dataFetching';
 
 export class AzureCosmosDb implements INodeType {
 	description: INodeTypeDescription = {
-		displayName: 'Azure Cosmos DB',
+		displayName: 'Azure Cosmos Db',
 		name: 'azureCosmosDb',
 		icon: {
 			light: 'file:AzureCosmosDB.svg',
