@@ -1,12 +1,12 @@
 import type { INodeProperties } from 'n8n-workflow';
 
 import {
-	formatJSONFields,
 	processResponseContainers,
 	simplifyData,
 	validateContainerFields,
 } from '../generalFunctions/dataHandling';
 import { handleErrorPostReceive } from '../generalFunctions/errorHandling';
+import { formatJSONFields } from '../generalFunctions/helpers';
 export const containerOperations: INodeProperties[] = [
 	{
 		displayName: 'Operation',

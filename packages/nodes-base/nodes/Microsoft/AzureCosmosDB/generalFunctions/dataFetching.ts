@@ -15,11 +15,16 @@ async function fetchData(
 	url: string,
 	key: 'DocumentCollections' | 'Documents',
 ): Promise<IDataObject[]> {
-	const opts: IHttpRequestOptions = { method: 'GET', url };
-	const responseData = await makeAzureCosmosDbRequest.call(this, opts);
+	try {
+		const opts: IHttpRequestOptions = { method: 'GET', url };
+		const responseData = await makeAzureCosmosDbRequest.call(this, opts);
 
-	const data = responseData[key];
-	return Array.isArray(data) ? data : [];
+		const data = responseData[key] as IDataObject;
+
+		return Array.isArray(data) ? data : [];
+	} catch (error) {
+		throw new ApplicationError(`Error fetching data from Azure Cosmos DB: ${error.message}`);
+	}
 }
 
 export async function searchContainers(

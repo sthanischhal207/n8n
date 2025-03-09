@@ -17,17 +17,20 @@ export async function validateQueryParameters(
 	const queryOptions = this.getNodeParameter('options', {}) as IDataObject;
 
 	const parameterNames = query.match(/@\w+/g) ?? [];
-	const parameterValues =
-		(queryOptions?.queryParameters as string).split(',').map((param: string) => param.trim()) ?? [];
+
+	const queryParameters = queryOptions?.queryOptions as IDataObject;
+	const queryParamsString = queryParameters?.queryParameters as string;
+	const parameterValues = queryParamsString
+		? queryParamsString.split(',').map((param) => param.trim())
+		: [];
 
 	if (parameterNames.length !== parameterValues.length) {
 		throw new NodeApiError(
 			this.getNode(),
 			{},
 			{
-				message: `Expected ${parameterNames.length} query parameters, but got ${parameterValues.length}.`,
-				description:
-					'Ensure that the number of query parameters matches the number of values provided.',
+				message: 'Empty parameter value provided',
+				description: 'Please provide non-empty values for the query parameters',
 			},
 		);
 	}
@@ -45,47 +48,31 @@ export async function validateQueryParameters(
 	return requestOptions;
 }
 
-export function parseCustomProperties(this: IExecuteSingleFunctions): IDataObject {
-	const customProperties = this.getNodeParameter('customProperties', {});
-
-	if (
-		customProperties &&
-		(Object.keys(customProperties).length === 2 || Object.keys(customProperties).length === 0)
-	) {
-		throw new NodeApiError(
-			this.getNode(),
-			{},
-			{
-				message: 'No custom property provided',
-				description: 'Custom properties must contain at least one field to update',
-			},
-		);
-	}
-
-	try {
-		return typeof customProperties === 'string' ? JSON.parse(customProperties) : customProperties;
-	} catch {
-		throw new NodeApiError(
-			this.getNode(),
-			{},
-			{
-				message: 'Invalid item contents format',
-				description: 'Item contents must be a valid JSON object.',
-			},
-		);
-	}
-}
-
 export async function validatePartitionKey(
 	this: IExecuteSingleFunctions,
 	requestOptions: IHttpRequestOptions,
 ): Promise<IHttpRequestOptions> {
-	const operation = this.getNodeParameter('operation') as string;
-	const customProperties = this.getNodeParameter('customProperties', {});
+	const operation = this.getNodeParameter('operation');
+	let customProperties = this.getNodeParameter('customProperties', {}) as IDataObject;
 
 	const partitionKeyResult = await fetchPartitionKeyField.call(this);
 	const partitionKeyField =
 		partitionKeyResult.results.length > 0 ? partitionKeyResult.results[0].value : '';
+
+	if (typeof customProperties === 'string') {
+		try {
+			customProperties = JSON.parse(customProperties);
+		} catch (error) {
+			throw new NodeApiError(
+				this.getNode(),
+				{},
+				{
+					message: 'Invalid JSON format in "Item Contents".',
+					description: 'Ensure the "Item Contents" field contains a valid JSON object.',
+				},
+			);
+		}
+	}
 
 	if (!partitionKeyField) {
 		throw new NodeApiError(
@@ -109,40 +96,21 @@ export async function validatePartitionKey(
 		);
 	}
 
-	let parsedProperties: IDataObject;
-
-	try {
-		parsedProperties =
-			typeof customProperties === 'string' ? JSON.parse(customProperties) : customProperties;
-	} catch (error) {
-		throw new NodeApiError(
-			this.getNode(),
-			{},
-			{
-				message: 'Invalid custom properties format',
-				description: 'Custom properties must be a valid JSON object.',
-			},
-		);
-	}
 	let id;
 	let partitionKeyValue;
 
 	if (operation === 'create') {
-		if (partitionKeyField === 'id') {
-			partitionKeyValue = this.getNodeParameter('newId', '');
-		} else {
-			if (!Object.prototype.hasOwnProperty.call(parsedProperties, partitionKeyField)) {
-				throw new NodeApiError(
-					this.getNode(),
-					{},
-					{
-						message: 'Partition key not found in custom properties',
-						description: `Partition key "${partitionKeyField}" must be present and have a valid, non-empty value in custom properties.`,
-					},
-				);
-			}
-			partitionKeyValue = parsedProperties[partitionKeyField];
+		if (!Object.prototype.hasOwnProperty.call(customProperties, partitionKeyField)) {
+			throw new NodeApiError(
+				this.getNode(),
+				{},
+				{
+					message: 'Partition key not found in custom properties',
+					description: `Partition key "${partitionKeyField}" must be present and have a valid, non-empty value in custom properties.`,
+				},
+			);
 		}
+		partitionKeyValue = customProperties[partitionKeyField];
 	} else if (operation === 'update') {
 		const additionalFields = this.getNodeParameter('additionalFields', {}) as IDataObject;
 		partitionKeyValue = additionalFields.partitionKey;
@@ -245,121 +213,13 @@ export async function validateContainerFields(
 	return requestOptions;
 }
 
-export async function formatCustomProperties(
-	this: IExecuteSingleFunctions,
-	requestOptions: IHttpRequestOptions,
-): Promise<IHttpRequestOptions> {
-	const parsedProperties = parseCustomProperties.call(this);
-
-	const operation = this.getNodeParameter('operation') as string;
-
-	if (operation === 'update') {
-		const itemId = (this.getNodeParameter('id', {}) as IDataObject).value as string;
-
-		if (!itemId || typeof itemId !== 'string') {
-			throw new NodeApiError(
-				this.getNode(),
-				{},
-				{
-					message: 'Missing or invalid "id" field for update operation.',
-					description: 'The "id" must be provided separately when updating an item.',
-				},
-			);
-		}
-
-		parsedProperties.id = itemId;
-	}
-
-	if (!parsedProperties.id || typeof parsedProperties.id !== 'string') {
-		throw new NodeApiError(
-			this.getNode(),
-			{},
-			{
-				message: 'Missing or invalid "id" field.',
-				description: 'The "customProperties" JSON must contain an "id" field as a string.',
-			},
-		);
-	}
-
-	if (/\s/.test(parsedProperties.id)) {
-		throw new NodeApiError(
-			this.getNode(),
-			{},
-			{
-				message: 'Invalid ID format: IDs cannot contain spaces.',
-				description: 'Use an underscore (_) or another separator instead.',
-			},
-		);
-	}
-
-	if (
-		!requestOptions.body ||
-		typeof requestOptions.body !== 'object' ||
-		requestOptions.body === null
-	) {
-		requestOptions.body = {};
-	}
-
-	Object.assign(requestOptions.body, parsedProperties);
-
-	return requestOptions;
-}
-
-export async function formatJSONFields(
-	this: IExecuteSingleFunctions,
-	requestOptions: IHttpRequestOptions,
-): Promise<IHttpRequestOptions> {
-	const additionalFields = this.getNodeParameter('additionalFields', {}) as IDataObject;
-	const rawPartitionKey = additionalFields.partitionKey as string | undefined;
-	const indexingPolicy = additionalFields.indexingPolicy as string;
-
-	const parseJSON = (
-		jsonString: string | undefined,
-		defaultValue: IDataObject = {},
-	): IDataObject => {
-		if (!jsonString) return defaultValue;
-		try {
-			return JSON.parse(jsonString);
-		} catch {
-			throw new NodeApiError(
-				this.getNode(),
-				{},
-				{
-					message: 'Invalid JSON format',
-					description:
-						'Please provide valid JSON objects for "Partition Key" or "Indexing Policy".',
-				},
-			);
-		}
-	};
-
-	const defaultPartitionKey = { paths: ['/id'], kind: 'Hash', version: 2 };
-	const parsedPartitionKey = parseJSON(rawPartitionKey, defaultPartitionKey);
-	const parsedIndexPolicy = parseJSON(indexingPolicy);
-
-	if (
-		!requestOptions.body ||
-		typeof requestOptions.body !== 'object' ||
-		requestOptions.body === null
-	) {
-		requestOptions.body = {};
-	}
-
-	(requestOptions.body as IDataObject).partitionKey = parsedPartitionKey;
-	if (Object.keys(parsedIndexPolicy).length > 0) {
-		(requestOptions.body as IDataObject).indexingPolicy = parsedIndexPolicy;
-	}
-
-	return requestOptions;
-}
-
 export async function processResponseItems(
 	this: IExecuteSingleFunctions,
 	items: INodeExecutionData[],
 	response: IN8nHttpFullResponse,
 ): Promise<INodeExecutionData[]> {
 	if (!response || typeof response !== 'object' || !Array.isArray(items)) {
-		throw new ApplicationError('Invalid response format from Cosmos DB.');
+		throw new ApplicationError('Invalid response format from Azure Cosmos DB.');
 	}
 
 	const extractedDocuments = items.flatMap((item) => {
@@ -380,7 +240,7 @@ export async function processResponseContainers(
 	response: IN8nHttpFullResponse,
 ): Promise<INodeExecutionData[]> {
 	if (!response || typeof response !== 'object' || !Array.isArray(items)) {
-		throw new ApplicationError('Invalid response format from Cosmos DB.');
+		throw new ApplicationError('Invalid response format from Azure Cosmos DB.');
 	}
 
 	const data = response.body as IDataObject;
@@ -395,6 +255,9 @@ export async function simplifyData(
 	_response: IN8nHttpFullResponse,
 ): Promise<INodeExecutionData[]> {
 	const simple = this.getNodeParameter('simple');
+	const operation = this.getNodeParameter('operation');
+	const resource = this.getNodeParameter('resource');
+
 	if (!simple) {
 		return items;
 	}
@@ -412,6 +275,9 @@ export async function simplifyData(
 
 	return items.map((item) => {
 		const simplifiedData = simplifyFields(item.json || item);
-		return { json: simplifiedData };
+		if (operation === 'get' || (resource === 'container' && operation === 'getAll')) {
+			return { json: simplifiedData } as INodeExecutionData;
+		}
+		return { ...simplifiedData } as INodeExecutionData;
 	});
 }

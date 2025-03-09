@@ -34,6 +34,7 @@ export class AzureCosmosDb implements INodeType {
 				Accept: 'application/json',
 				'Content-Type': 'application/json',
 			},
+			ignoreHttpStatusErrors: true,
 		},
 		properties: [
 			{

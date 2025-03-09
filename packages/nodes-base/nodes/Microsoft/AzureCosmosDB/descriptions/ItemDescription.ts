@@ -1,13 +1,13 @@
 import type { INodeProperties } from 'n8n-workflow';
 
 import {
-	formatCustomProperties,
 	processResponseItems,
 	simplifyData,
 	validatePartitionKey,
 	validateQueryParameters,
 } from '../generalFunctions/dataHandling';
 import { handleErrorPostReceive } from '../generalFunctions/errorHandling';
+import { formatCustomProperties } from '../generalFunctions/helpers';
 import { handlePagination } from '../generalFunctions/pagination';
 import { presendLimitField } from '../generalFunctions/presendFunctions';
 
@@ -138,6 +138,7 @@ export const itemOperations: INodeProperties[] = [
 								},
 							},
 							handleErrorPostReceive,
+							simplifyData,
 						],
 					},
 				},
@@ -634,6 +635,19 @@ export const queryFields: INodeProperties[] = [
 				value: '={{$value}}',
 			},
 		},
+	},
+	{
+		displayName: 'Simplify',
+		name: 'simple',
+		type: 'boolean',
+		displayOptions: {
+			show: {
+				resource: ['item'],
+				operation: ['query'],
+			},
+		},
+		default: true,
+		description: 'Whether to return a simplified version of the response instead of the raw data',
 	},
 	{
 		displayName: 'Options',
