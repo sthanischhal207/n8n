@@ -275,9 +275,8 @@ export async function simplifyData(
 
 	return items.map((item) => {
 		const simplifiedData = simplifyFields(item.json || item);
-		if (operation === 'get' || (resource === 'container' && operation === 'getAll')) {
-			return { json: simplifiedData } as INodeExecutionData;
-		}
-		return { ...simplifiedData } as INodeExecutionData;
+		if (resource === 'item' && operation === 'getAll')
+			return { ...simplifiedData } as INodeExecutionData;
+		else return { json: simplifiedData } as INodeExecutionData;
 	});
 }
