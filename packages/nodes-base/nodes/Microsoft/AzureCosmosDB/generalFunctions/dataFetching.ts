@@ -69,7 +69,7 @@ export async function fetchPartitionKeyField(
 		!Array.isArray(responseData.partitionKey) &&
 		'paths' in responseData.partitionKey
 	) {
-		const partitionKey = responseData.partitionKey as IDataObject;
+		const partitionKey = responseData.partitionKey;
 		if (Array.isArray(partitionKey.paths)) {
 			partitionKeyField = partitionKey.paths[0]?.replace('/', '') || '';
 		}
