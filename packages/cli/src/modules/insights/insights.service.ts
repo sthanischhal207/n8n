@@ -1,5 +1,6 @@
 import type { InsightsSummary } from '@n8n/api-types';
 import { Container, Service } from '@n8n/di';
+import { InstanceSettings, Logger } from 'n8n-core';
 import type { ExecutionLifecycleHooks } from 'n8n-core';
 import {
 	UnexpectedError,
@@ -13,6 +14,7 @@ import { SharedWorkflowRepository } from '@/databases/repositories/shared-workfl
 import { OnShutdown } from '@/decorators/on-shutdown';
 import { InsightsMetadata } from '@/modules/insights/database/entities/insights-metadata';
 import { InsightsRaw } from '@/modules/insights/database/entities/insights-raw';
+import { OrchestrationService } from '@/services/orchestration.service';
 
 import type { TypeUnit } from './database/entities/insights-shared';
 import { NumberToType } from './database/entities/insights-shared';
@@ -55,12 +57,27 @@ export class InsightsService {
 
 	private compactInsightsTimer: NodeJS.Timer | undefined;
 
+	private pruneInsightsTimer: NodeJS.Timer | undefined;
+
 	constructor(
+		private readonly logger: Logger,
 		private readonly sharedWorkflowRepository: SharedWorkflowRepository,
 		private readonly insightsByPeriodRepository: InsightsByPeriodRepository,
 		private readonly insightsRawRepository: InsightsRawRepository,
+		private readonly instanceSettings: InstanceSettings,
+		private readonly orchestrationService: OrchestrationService,
 	) {
+		this.logger = this.logger.scoped('insights');
 		this.initializeCompaction();
+		this.initializePruning();
+	}
+
+	get isPruningEnabled() {
+		return (
+			this.instanceSettings.instanceType === 'main' &&
+			this.instanceSettings.isLeader &&
+			config.maxAgeDays > -1
+		);
 	}
 
 	initializeCompaction() {
@@ -74,12 +91,44 @@ export class InsightsService {
 		);
 	}
 
+	initializePruning() {
+		if (!this.isPruningEnabled) {
+			return;
+		}
+
+		if (this.instanceSettings.isMultiMain) {
+			this.orchestrationService.multiMainSetup.on('leader-takeover', () =>
+				this.startPruningScheduling(),
+			);
+			this.orchestrationService.multiMainSetup.on('leader-stepdown', () =>
+				this.stopPruningScheduling(),
+			);
+		}
+	}
+
+	startPruningScheduling() {
+		this.stopPruningScheduling();
+		this.pruneInsightsTimer = setInterval(
+			async () => await this.pruneInsights(),
+			config.pruneCheckIntervalHours * 24 * 60 * 1000,
+		);
+		this.logger.debug(`Insights pruning every ${config.pruneCheckIntervalHours} hours`);
+	}
+
+	stopPruningScheduling() {
+		if (this.pruneInsightsTimer !== undefined) {
+			clearInterval(this.pruneInsightsTimer);
+			this.pruneInsightsTimer = undefined;
+		}
+	}
+
 	@OnShutdown()
 	shutdown() {
 		if (this.compactInsightsTimer !== undefined) {
 			clearInterval(this.compactInsightsTimer);
 			this.compactInsightsTimer = undefined;
 		}
+		this.stopPruningScheduling();
 	}
 
 	async workflowExecuteAfterHandler(ctx: ExecutionLifecycleHooks, fullRunData: IRun) {
@@ -151,6 +200,11 @@ export class InsightsService {
 				await trx.insert(InsightsRaw, event);
 			}
 		});
+	}
+
+	async pruneInsights() {
+		const result = await this.insightsByPeriodRepository.pruneOldData(config.maxAgeDays);
+		this.logger.debug('Hard-deleted insights', { count: result.affected });
 	}
 
 	async compactInsights() {

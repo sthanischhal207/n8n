@@ -262,4 +262,13 @@ export class InsightsByPeriodRepository extends Repository<InsightsByPeriod> {
 
 		return summaryParser.parse(rawRows);
 	}
+
+	async pruneOldData(maxAgeInDays: number): Promise<{ affected: number }> {
+		const result = await this.createQueryBuilder()
+			.delete()
+			.where(`${this.escapeField('periodStart')} < ${this.getPeriodFilterExpr(maxAgeInDays)}`)
+			.execute();
+
+		return { affected: result.affected ?? 0 };
+	}
 }
