@@ -1,7 +1,7 @@
 import { Pinecone } from '@pinecone-database/pinecone';
 import { ApplicationError, type IDataObject, type ILoadOptionsFunctions } from 'n8n-workflow';
 
-import type { QdrantCredentials } from '../../../VectorStoreQdrant/Qdrant.utils';
+import type { QdrantCredential } from '../../../VectorStoreQdrant/Qdrant.utils';
 import { createQdrantClient } from '../../../VectorStoreQdrant/Qdrant.utils';
 
 export async function pineconeIndexSearch(this: ILoadOptionsFunctions) {
@@ -55,7 +55,7 @@ export async function supabaseTableNameSearch(this: ILoadOptionsFunctions) {
 export async function qdrantCollectionsSearch(this: ILoadOptionsFunctions) {
 	const credentials = await this.getCredentials('qdrantApi');
 
-	const client = createQdrantClient(credentials as QdrantCredentials);
+	const client = createQdrantClient(credentials as QdrantCredential);
 
 	const response = await client.getCollections();
 
