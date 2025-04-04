@@ -197,7 +197,9 @@ export class Start extends BaseCommand {
 		await super.init();
 		this.activeWorkflowManager = Container.get(ActiveWorkflowManager);
 
+		console.log('Initializing license');
 		await this.initLicense();
+		console.log('License Initialized ');
 
 		await this.initOrchestration();
 		this.logger.debug('Orchestration init complete');

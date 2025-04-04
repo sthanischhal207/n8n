@@ -115,9 +115,12 @@ export abstract class BaseCommand extends Command {
 			await Container.get(CommunityPackagesService).checkForMissingPackages();
 		}
 
+		console.log('DB init done. Starting message bus');
+
 		// TODO: remove this after the cyclic dependencies around the event-bus are resolved
 		Container.get(MessageEventBus);
 
+		console.log('Setting up telemetry');
 		await Container.get(PostHogClient).init();
 		await Container.get(TelemetryEventRelay).init();
 	}

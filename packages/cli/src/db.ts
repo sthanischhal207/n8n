@@ -58,9 +58,13 @@ export async function init(): Promise<void> {
 	const connectionOptions = getConnectionOptions();
 	connection = new Connection(connectionOptions);
 	Container.set(Connection, connection);
+	console.log('Connecting to the DB');
 	try {
 		await connection.initialize();
+		console.log('DB connected');
 	} catch (e) {
+		console.log('DB connection failed');
+		console.log(e);
 		let error = ensureError(e);
 		if (
 			arePostgresOptions(connectionOptions) &&
