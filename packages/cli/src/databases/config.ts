@@ -7,7 +7,6 @@ import type { SqlitePooledConnectionOptions } from '@n8n/typeorm/driver/sqlite-p
 import { InstanceSettings } from 'n8n-core';
 import { ApplicationError } from 'n8n-workflow';
 import path from 'path';
-import type { TlsOptions } from 'tls';
 import { Container } from 'typedi';
 
 import { entities } from './entities';
@@ -83,19 +82,6 @@ const getSqliteConnectionOptions = (): SqliteConnectionOptions | SqlitePooledCon
 
 const getPostgresConnectionOptions = (): PostgresConnectionOptions => {
 	const postgresConfig = Container.get(GlobalConfig).database.postgresdb;
-	const {
-		ssl: { ca: sslCa, cert: sslCert, key: sslKey, rejectUnauthorized: sslRejectUnauthorized },
-	} = postgresConfig;
-
-	let ssl: TlsOptions | boolean = postgresConfig.ssl.enabled;
-	if (sslCa !== '' || sslCert !== '' || sslKey !== '' || !sslRejectUnauthorized) {
-		ssl = {
-			ca: sslCa || undefined,
-			cert: sslCert || undefined,
-			key: sslKey || undefined,
-			rejectUnauthorized: sslRejectUnauthorized,
-		};
-	}
 
 	return {
 		type: 'postgres',
@@ -105,7 +91,7 @@ const getPostgresConnectionOptions = (): PostgresConnectionOptions => {
 		poolSize: postgresConfig.poolSize,
 		migrations: postgresMigrations,
 		connectTimeoutMS: postgresConfig.connectionTimeoutMs,
-		ssl,
+		ssl: false,
 	};
 };
 

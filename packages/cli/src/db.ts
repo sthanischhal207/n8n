@@ -13,6 +13,7 @@ import { inTest } from '@/constants';
 import { getConnectionOptions, arePostgresOptions } from '@/databases/config';
 import type { Migration } from '@/databases/types';
 import { wrapMigration } from '@/databases/utils/migration-helpers';
+import type { PostgresConnectionOptions } from '@n8n/typeorm/driver/postgres/PostgresConnectionOptions';
 
 let connection: Connection;
 
@@ -58,7 +59,8 @@ export async function init(): Promise<void> {
 	const connectionOptions = getConnectionOptions();
 	connection = new Connection(connectionOptions);
 	Container.set(Connection, connection);
-	console.log('Connecting to the DB');
+	const { password, ...rest } = connectionOptions as PostgresConnectionOptions;
+	console.log('Connecting to the DB', rest);
 	try {
 		await connection.initialize();
 		console.log('DB connected');
