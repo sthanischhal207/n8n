@@ -41,7 +41,7 @@ export class VectorStoreMilvus extends createVectorStoreNode<Milvus>({
 				required: true,
 			},
 		],
-		operationModes: ['load', 'insert', 'retrieve', 'retrieve-as-tool'],
+		operationModes: ['load', 'insert', 'update', 'retrieve', 'retrieve-as-tool'],
 	},
 	methods: { listSearch: { milvusCollectionsSearch } },
 	sharedFields,
